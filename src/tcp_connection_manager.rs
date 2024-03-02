@@ -44,7 +44,6 @@ impl Manager for TcpConnectionManager {
 }
 
 impl TcpConnectionManager {
-    // Initialize with a list of server addresses and a timeout
     pub fn initialize_with(server_addresses: Vec<String>, timeout: Duration) -> Self {
         TcpConnectionManager {
             server_addresses,

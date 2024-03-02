@@ -36,12 +36,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let max_requests_per_target = route.max_requests_per_target;
         let resource_endpoints = Arc::new(Mutex::new(route.resource_endpoints));
 
-        let pool_clone = pool.clone(); // Clone the pool for use in the spawned task
+        let pool_clone = pool.clone();
 
         tokio::spawn(async move {
             if let Err(e) = proxy::accept_connections(
                 listener,
-                pool_clone, // Pass the cloned pool here
+                pool_clone,
                 target_addrs,
                 timeout,
                 balance_strategy,

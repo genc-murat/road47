@@ -42,7 +42,7 @@ impl BalanceStrategy {
         &self,
         target_addrs: Arc<Mutex<VecDeque<String>>>,
         connection_counts: Arc<Mutex<HashMap<String, usize>>>,
-        request_limits: Arc<Mutex<HashMap<String, usize>>>, // Her hedef için istek sınırlarını tutan yapı
+        request_limits: Arc<Mutex<HashMap<String, usize>>>,
         max_requests_per_target: usize,
         resource_endpoints: Arc<Mutex<Vec<String>>>,
     ) -> Option<String> {
@@ -51,14 +51,12 @@ impl BalanceStrategy {
         let mut counts = connection_counts.lock().await;
         let mut limits = request_limits.lock().await;
 
-        // Addrs boşsa, None döndür
         if addrs_len == 0 {
             return None;
         }
 
         match *self {
             BalanceStrategy::RoundRobin => {
-                // İlk adresi al, sona koy ve adresi döndür
                 if let Some(addr) = addrs.pop_front() {
                     addrs.push_back(addr.clone());
                     Some(addr)
@@ -68,8 +66,8 @@ impl BalanceStrategy {
             }
             BalanceStrategy::Random => {
                 let mut rng = rand::thread_rng();
-                let index = rng.gen_range(0..addrs_len); // Rastgele bir indeks seç
-                addrs.get(index).cloned() // Bu indekse göre adresi al
+                let index = rng.gen_range(0..addrs_len);
+                addrs.get(index).cloned()
             }
             BalanceStrategy::LeastConnections => {
                 let target = addrs
@@ -89,7 +87,7 @@ impl BalanceStrategy {
                         return Some(addr.clone());
                     }
                 }
-                None // Tüm hedefler sınırı aştıysa, None döndür
+                None
             }
             BalanceStrategy::ResourceBased => {
                 let endpoints = resource_endpoints.lock().await;

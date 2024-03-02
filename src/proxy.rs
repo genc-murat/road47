@@ -1,7 +1,7 @@
 use crate::balance::BalanceStrategy;
 use log::{info, warn};
 use mobc::Error as MobcError;
-use mobc::{async_trait, Manager, Pool};
+use mobc::Pool;
 use road47::tcp_connection_manager::TcpConnectionManager;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -66,37 +66,31 @@ async fn proxy_connection(
     target_addr: &str,
     timeout: Duration,
     connection_counts: Arc<Mutex<HashMap<String, usize>>>,
-    pool: Arc<Pool<TcpConnectionManager>>, // Add a pool parameter
+    pool: Arc<Pool<TcpConnectionManager>>,
 ) -> io::Result<()> {
-    //let connect_future = TcpStream::connect(target_addr);
     let target_stream_future = pool.get();
     let mut target = match time::timeout(timeout, target_stream_future).await {
         Ok(Ok(stream)) => {
-            // Bağlantı başarılı
             info!("Connection established to {}", target_addr);
             stream
         }
-        Ok(Err(e)) => {
-            // Handle mobc error
-            match e {
-                MobcError::Timeout => {
-                    warn!("Connection to {} timed out", target_addr);
-                    return Err(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "Connection timed out",
-                    ));
-                }
-                _ => {
-                    warn!("Failed to connect to {}: {:?}", target_addr, e);
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Failed to connect to {}: {:?}", target_addr, e),
-                    ));
-                }
+        Ok(Err(e)) => match e {
+            MobcError::Timeout => {
+                warn!("Connection to {} timed out", target_addr);
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Connection timed out",
+                ));
             }
-        }
+            _ => {
+                warn!("Failed to connect to {}: {:?}", target_addr, e);
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to connect to {}: {:?}", target_addr, e),
+                ));
+            }
+        },
         Err(_) => {
-            // Zaman aşımı
             warn!("Connection to {} timed out", target_addr);
             return Err(io::Error::new(
                 io::ErrorKind::TimedOut,
@@ -105,7 +99,6 @@ async fn proxy_connection(
         }
     };
 
-    // Bağlantı başarılı olduğunda, sayacı artır
     {
         let mut counts = connection_counts.lock().await;
         *counts.entry(target_addr.to_string()).or_insert(0) += 1;
@@ -122,7 +115,6 @@ async fn proxy_connection(
         Err(e) => warn!("Proxy operation failed for {}: {:?}", target_addr, e),
     }
 
-    // Bağlantı işlemi tamamlandıktan sonra, sayacı azalt
     {
         let mut counts = connection_counts.lock().await;
         if let Some(count) = counts.get_mut(target_addr) {
