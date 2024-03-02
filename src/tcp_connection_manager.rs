@@ -1,8 +1,9 @@
+use crate::config::load_config;
+use crate::retry::connect_with_retry;
 use mobc::{async_trait, Manager};
 use std::io;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::time;
 use tokio::time::Duration;
 
 pub struct TcpConnectionManager {
@@ -16,20 +17,15 @@ impl Manager for TcpConnectionManager {
     type Error = io::Error;
 
     async fn connect(&self) -> Result<Self::Connection, Self::Error> {
-        let mut last_err = None;
-        for address in &self.server_addresses {
-            match time::timeout(self.timeout, TcpStream::connect(address)).await {
-                Ok(Ok(stream)) => return Ok(stream),
-                Ok(Err(e)) => last_err = Some(e),
-                Err(_) => {
-                    last_err = Some(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        "Connection timed out",
-                    ))
-                }
-            }
-        }
-        Err(last_err.unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to connect")))
+        let config = load_config().expect("Failed to load config");
+
+        connect_with_retry(
+            &self.server_addresses,
+            config.retry_strategy.max_attempts,
+            config.retry_strategy.max_delay_secs,
+            config.retry_strategy.initial_delay_millis,
+        )
+        .await
     }
 
     async fn check(&self, mut conn: Self::Connection) -> Result<Self::Connection, Self::Error> {

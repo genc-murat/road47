@@ -1,8 +1,18 @@
 use serde::Deserialize;
+use std::fs;
+use std::io;
 
 #[derive(Deserialize)]
 pub struct Config {
     pub route: Vec<Route>,
+    pub retry_strategy: RetryStrategyConfig,
+}
+
+#[derive(Deserialize)]
+pub struct RetryStrategyConfig {
+    pub max_delay_secs: u64,
+    pub max_attempts: usize,
+    pub initial_delay_millis: u64,
 }
 
 #[derive(Deserialize)]
@@ -14,6 +24,12 @@ pub struct Route {
     pub balance_strategy: String,
     pub max_requests_per_target: usize,
     pub resource_endpoints: Vec<String>,
+}
+
+pub fn load_config() -> Result<Config, io::Error> {
+    let config_str = fs::read_to_string("config.toml")?;
+    let config: Config = toml::from_str(&config_str)?;
+    Ok(config)
 }
 
 //The resource endpoint might return data like the following JSON, which your load balancer would need to parse: {

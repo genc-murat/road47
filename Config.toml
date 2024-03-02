@@ -28,3 +28,8 @@ resource_endpoints = [
 balance_strategy = "resourcebased"
 timeout_seconds = 5
 max_requests_per_target = 100
+
+[retry_strategy]
+max_delay_secs = 2
+max_attempts = 5
+initial_delay_millis = 100
