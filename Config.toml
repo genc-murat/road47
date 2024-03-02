@@ -1,0 +1,30 @@
+[[route]]
+listen_addr = "127.0.0.1:8080"
+target_addrs = ["127.0.0.1:80", "127.0.0.1:81"]
+timeout_seconds = 30
+balance_strategy = "round_robin"
+
+[[route]]
+listen_addr = "127.0.0.1:8081"
+target_addrs = ["127.0.0.1:82", "127.0.0.1:83"]
+timeout_seconds = 20
+balance_strategy = "random"
+
+
+[[route]]
+listen_addr = "127.0.0.1:8080"
+target_addrs = ["127.0.0.1:80", "127.0.0.1:81"]
+timeout_seconds = 30
+balance_strategy = "ratelimiting"
+max_requests_per_target = 100
+
+[[route]]
+listen_addr = "0.0.0.0:8080"
+target_addrs = ["http://server1:8080", "http://server2:8080"]
+resource_endpoints = [
+    "http://server1:8081/resources",
+    "http://server2:8081/resources",
+]
+balance_strategy = "resourcebased"
+timeout_seconds = 5
+max_requests_per_target = 100
