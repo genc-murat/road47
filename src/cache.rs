@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-
 use std::time::{Duration, Instant};
 
 pub struct CacheEntry {
@@ -8,15 +7,15 @@ pub struct CacheEntry {
 }
 
 impl CacheEntry {
-    pub fn new(value: Vec<u8>, ttl: Duration) -> Self {
+    pub fn new(value: Vec<u8>, ttl: Duration, now: Instant) -> Self {
         CacheEntry {
             value,
-            expiry: Instant::now() + ttl,
+            expiry: now + ttl,
         }
     }
 
-    pub fn is_expired(&self) -> bool {
-        Instant::now() > self.expiry
+    pub fn is_expired(&self, now: Instant) -> bool {
+        now > self.expiry
     }
 }
 
@@ -34,8 +33,9 @@ impl Cache {
     }
 
     pub fn get(&self, key: &str) -> Option<&Vec<u8>> {
+        let now = Instant::now();
         self.entries.get(key).and_then(|entry| {
-            if entry.is_expired() {
+            if entry.is_expired(now) {
                 None
             } else {
                 Some(&entry.value)
@@ -44,7 +44,8 @@ impl Cache {
     }
 
     pub fn put(&mut self, key: String, value: Vec<u8>) {
-        let entry = CacheEntry::new(value, self.ttl);
+        let now = Instant::now();
+        let entry = CacheEntry::new(value, self.ttl, now);
         self.entries.insert(key, entry);
     }
 }
