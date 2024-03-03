@@ -40,6 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             route.cache_ttl_seconds.unwrap_or_default(),
         )));
         let cache_enabled_endpoints = route.cache_enabled_endpoints.clone();
+        let target_weights = route.target_weights.as_ref().map(|tw| tw.clone());
 
         // Spawn a new task for accepting connections
         tokio::spawn(async move {
@@ -55,6 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 resource_endpoints,
                 cache,
                 cache_enabled_endpoints,
+                target_weights,
             )
             .await
             {

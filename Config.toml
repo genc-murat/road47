@@ -30,6 +30,27 @@ timeout_seconds = 5
 max_requests_per_target = 100
 cache_enabled_endpoints = ["/api/data", "/api/static"]
 
+[[route]]
+listen_addr = "127.0.0.1:8080"
+target_addrs = ["192.168.1.1:80", "192.168.1.2:80"]
+target_weights = { "192.168.1.1:80" = 3, "192.168.1.2:80" = 1 }
+resource_usage_api = [
+    "http://192.168.1.1:8080/usage",
+    "http://192.168.1.2:8080/usage",
+]
+timeout_seconds = 5
+balance_strategy = "weightedroundrobin"
+max_requests_per_target = 100
+resource_endpoints = [
+    "http://192.168.1.1:8080/resource",
+    "http://192.168.1.2:8080/resource",
+]
+cache_enabled_endpoints = [
+    "http://192.168.1.1:8080/cache",
+    "http://192.168.1.2:8080/cache",
+]
+cache_ttl_seconds = 60
+
 [retry_strategy]
 max_delay_secs = 2
 max_attempts = 5

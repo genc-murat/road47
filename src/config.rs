@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 
@@ -19,6 +20,7 @@ pub struct RetryStrategyConfig {
 pub struct Route {
     pub listen_addr: String,
     pub target_addrs: Vec<String>,
+    pub target_weights: Option<HashMap<String, usize>>,
     pub resource_usage_api: Vec<String>,
     pub timeout_seconds: u64,
     pub balance_strategy: String,
@@ -26,12 +28,6 @@ pub struct Route {
     pub resource_endpoints: Vec<String>,
     pub cache_enabled_endpoints: Vec<String>,
     pub cache_ttl_seconds: Option<u64>,
-}
-
-pub fn load_config() -> Result<Config, io::Error> {
-    let config_str = fs::read_to_string("config.toml")?;
-    let config: Config = toml::from_str(&config_str)?;
-    Ok(config)
 }
 
 //The resource endpoint might return data like the following JSON, which your load balancer would need to parse: {

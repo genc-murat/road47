@@ -25,8 +25,19 @@ pub enum BalanceStrategy {
     LeastConnections,
     RateLimiting,
     ResourceBased,
+    WeightedRoundRobin,
+    DynamicRateLimiting,
 }
-
+fn calculate_dynamic_limit(addr: &String, connection_counts: &HashMap<String, usize>) -> usize {
+    // Örnek olarak, her hedef için dinamik olarak hesaplanan bir limit değeri döndürün
+    // Bu örnekte, basitlik adına, mevcut bağlantı sayısına bağlı basit bir mantık kullanacağız
+    let current_connections = connection_counts.get(addr).unwrap_or(&0);
+    if *current_connections > 100 {
+        50 // Eğer mevcut bağlantı sayısı 100'den fazlaysa, limiti 50 olarak belirle
+    } else {
+        100 // Aksi takdirde, limit 100 olsun
+    }
+}
 impl BalanceStrategy {
     pub fn from_str(strategy: &str) -> Self {
         match strategy {
@@ -34,6 +45,8 @@ impl BalanceStrategy {
             "leastconnections" => BalanceStrategy::LeastConnections,
             "ratelimiting" => BalanceStrategy::RateLimiting,
             "resourcebased" => BalanceStrategy::ResourceBased,
+            "weightedroundrobin" => BalanceStrategy::WeightedRoundRobin,
+            "dynamicratelimiting" => BalanceStrategy::DynamicRateLimiting,
             _ => BalanceStrategy::RoundRobin,
         }
     }
@@ -45,6 +58,7 @@ impl BalanceStrategy {
         request_limits: Arc<Mutex<HashMap<String, usize>>>,
         max_requests_per_target: usize,
         resource_endpoints: Arc<Mutex<Vec<String>>>,
+        target_weights: Option<HashMap<String, usize>>,
     ) -> Option<String> {
         let mut addrs = target_addrs.lock().await;
         let addrs_len = addrs.len();
@@ -105,6 +119,50 @@ impl BalanceStrategy {
                     addrs.get(*index).cloned()
                 } else {
                     None
+                }
+            }
+            BalanceStrategy::WeightedRoundRobin => {
+                let weights = target_weights.unwrap_or_else(|| {
+                    addrs
+                        .iter()
+                        .map(|addr| (addr.clone(), 1))
+                        .collect::<HashMap<String, usize>>()
+                });
+                let total_weight: usize = weights.values().sum();
+                let mut rng = rand::thread_rng();
+                let mut weight_point = rng.gen_range(0..total_weight);
+                for (addr, weight) in weights.iter() {
+                    if weight_point < *weight {
+                        return Some(addr.clone());
+                    }
+                    weight_point -= *weight;
+                }
+                None
+            }
+            BalanceStrategy::DynamicRateLimiting => {
+                let addrs = target_addrs.lock().await;
+                let counts = connection_counts.lock().await;
+
+                let eligible_addrs: Vec<_> = addrs
+                    .iter()
+                    .filter_map(|addr| {
+                        let limit = calculate_dynamic_limit(addr, &counts);
+                        let current_count = counts.get(addr).unwrap_or(&0);
+
+                        if *current_count < limit {
+                            Some(addr.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(); // Sonuçları bir vektöre toplayın
+
+                if eligible_addrs.is_empty() {
+                    None
+                } else {
+                    let mut rng = rand::thread_rng();
+                    let index = rng.gen_range(0..eligible_addrs.len());
+                    eligible_addrs.get(index).cloned() // Rastgele seçilen adresi döndür
                 }
             }
         }

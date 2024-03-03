@@ -1,6 +1,7 @@
-use crate::config::load_config;
+use crate::config::Config;
 use crate::retry::connect_with_retry;
 use mobc::{async_trait, Manager};
+use std::fs;
 use std::io;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
@@ -9,6 +10,12 @@ use tokio::time::Duration;
 pub struct TcpConnectionManager {
     pub server_addresses: Vec<String>,
     pub timeout: Duration,
+}
+
+fn load_config() -> Result<Config, io::Error> {
+    let config_str = fs::read_to_string("config.toml")?;
+    let config: Config = toml::from_str(&config_str)?;
+    Ok(config)
 }
 
 #[async_trait]

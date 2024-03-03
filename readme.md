@@ -15,6 +15,8 @@ Road47 is a versatile and high-performance proxy server designed to efficiently 
 - **Caching**: Integrates an in-memory cache to store and serve frequently accessed data, significantly reducing response times and backend load.
 - **Configurable and Extensible**: Easy to configure through TOML files, allowing quick setup and adjustments according to your infrastructure needs.
 - **High Performance and Scalability**: Designed with performance in mind, Road47 can handle high volumes of concurrent connections and is scalable to meet the demands of growing applications.
+- **Weighted Round Robin**: Distributes requests based on predefined weights assigned to each backend service, allowing more requests to be routed to higher-capacity or higher-priority services.
+- **Dynamic Rate Limiting**: Adjusts request limits in real-time based on current load or other metrics, enabling more flexible and responsive load handling.
 
 ## Getting Started
 

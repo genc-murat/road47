@@ -24,6 +24,7 @@ pub async fn accept_connections(
     resource_endpoints: Arc<Mutex<Vec<String>>>,
     cache: Arc<Mutex<Cache>>, // Add cache parameter
     cache_enabled_endpoints: Vec<String>,
+    target_weights: Option<HashMap<String, usize>>,
 ) -> io::Result<()> {
     while let Ok((incoming, _)) = listener.accept().await {
         let target_addrs_clone = target_addrs.clone();
@@ -36,7 +37,7 @@ pub async fn accept_connections(
 
         let cache_clone = cache.clone(); // Clone the cache for the spawned task
         let cache_enabled_endpoints_clone = cache_enabled_endpoints.clone();
-
+        let target_weights_clone = target_weights.clone();
         tokio::spawn(async move {
             if let Some(target_addr) = balance_strategy
                 .select_target(
@@ -45,6 +46,7 @@ pub async fn accept_connections(
                     request_limits_clone.clone(),
                     max_requests_per_target,
                     resource_endpoints_clone,
+                    target_weights_clone,
                 )
                 .await
             {
