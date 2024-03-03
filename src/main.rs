@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for route in config.route {
         let timeout = Duration::from_secs(route.timeout_seconds);
-        let manager = TcpConnectionManager::initialize_with(route.target_addrs.clone(), timeout);
+        let manager = TcpConnectionManager::initialize_with(route.target_addrs.clone());
         let pool = Arc::new(Pool::builder().build(manager));
 
         let listener = TcpListener::bind(&route.listen_addr).await?;

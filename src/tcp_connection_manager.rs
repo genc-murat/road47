@@ -5,11 +5,9 @@ use std::fs;
 use std::io;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::time::Duration;
 
 pub struct TcpConnectionManager {
     pub server_addresses: Vec<String>,
-    pub timeout: Duration,
 }
 
 fn load_config() -> Result<Config, io::Error> {
@@ -31,6 +29,7 @@ impl Manager for TcpConnectionManager {
             config.retry_strategy.max_attempts,
             config.retry_strategy.max_delay_secs,
             config.retry_strategy.initial_delay_millis,
+            config.retry_strategy.timeout_secs,
         )
         .await
     }
@@ -47,10 +46,7 @@ impl Manager for TcpConnectionManager {
 }
 
 impl TcpConnectionManager {
-    pub fn initialize_with(server_addresses: Vec<String>, timeout: Duration) -> Self {
-        TcpConnectionManager {
-            server_addresses,
-            timeout,
-        }
+    pub fn initialize_with(server_addresses: Vec<String>) -> Self {
+        TcpConnectionManager { server_addresses }
     }
 }

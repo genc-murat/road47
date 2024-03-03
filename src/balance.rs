@@ -155,14 +155,14 @@ impl BalanceStrategy {
                             None
                         }
                     })
-                    .collect(); // Sonuçları bir vektöre toplayın
+                    .collect();
 
                 if eligible_addrs.is_empty() {
                     None
                 } else {
                     let mut rng = rand::thread_rng();
                     let index = rng.gen_range(0..eligible_addrs.len());
-                    eligible_addrs.get(index).cloned() // Rastgele seçilen adresi döndür
+                    eligible_addrs.get(index).cloned()
                 }
             }
         }

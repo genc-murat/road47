@@ -1,7 +1,5 @@
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs;
-use std::io;
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -14,6 +12,7 @@ pub struct RetryStrategyConfig {
     pub max_delay_secs: u64,
     pub max_attempts: usize,
     pub initial_delay_millis: u64,
+    pub timeout_secs: u64,
 }
 
 #[derive(Deserialize)]
