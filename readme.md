@@ -1,6 +1,8 @@
 # Road47
 
-![Road47 Logo](road47logo.png)
+<div align="center">
+    <img src="/road47logo.png">
+</div>
 
 Road47 is a versatile and high-performance proxy server designed to efficiently manage and route TCP connections across multiple backend services. Built with scalability and flexibility in mind, it offers a wide array of features tailored for modern cloud architectures, including dynamic load balancing, connection pooling, rate limiting, and resource-based routing. Road47 is ideal for applications requiring high availability, fault tolerance, and seamless integration with microservices environments.
 
