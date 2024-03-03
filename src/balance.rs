@@ -29,13 +29,11 @@ pub enum BalanceStrategy {
     DynamicRateLimiting,
 }
 fn calculate_dynamic_limit(addr: &String, connection_counts: &HashMap<String, usize>) -> usize {
-    // Örnek olarak, her hedef için dinamik olarak hesaplanan bir limit değeri döndürün
-    // Bu örnekte, basitlik adına, mevcut bağlantı sayısına bağlı basit bir mantık kullanacağız
     let current_connections = connection_counts.get(addr).unwrap_or(&0);
     if *current_connections > 100 {
-        50 // Eğer mevcut bağlantı sayısı 100'den fazlaysa, limiti 50 olarak belirle
+        50 
     } else {
-        100 // Aksi takdirde, limit 100 olsun
+        100
     }
 }
 impl BalanceStrategy {
