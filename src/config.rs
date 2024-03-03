@@ -24,6 +24,8 @@ pub struct Route {
     pub balance_strategy: String,
     pub max_requests_per_target: usize,
     pub resource_endpoints: Vec<String>,
+    pub cache_enabled_endpoints: Vec<String>,
+    pub cache_ttl_seconds: Option<u64>,
 }
 
 pub fn load_config() -> Result<Config, io::Error> {

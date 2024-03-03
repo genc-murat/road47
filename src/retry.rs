@@ -27,7 +27,6 @@ pub async fn connect_with_retry(
             break;
         }
 
-        // Exponansiyel geri çekilme uygula
         delay = std::cmp::min(delay.mul(2), Duration::from_secs(max_delay_secs));
         sleep(delay).await;
     }

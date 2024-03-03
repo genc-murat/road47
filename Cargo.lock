@@ -816,6 +816,7 @@ dependencies = [
  "async-trait",
  "env_logger",
  "float-ord",
+ "futures-util",
  "log",
  "mobc",
  "rand",
@@ -825,6 +826,7 @@ dependencies = [
  "tokio",
  "tokio-retry",
  "toml",
+ "tower-service",
 ]
 
 [[package]]

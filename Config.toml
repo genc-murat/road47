@@ -28,6 +28,7 @@ resource_endpoints = [
 balance_strategy = "resourcebased"
 timeout_seconds = 5
 max_requests_per_target = 100
+cache_enabled_endpoints = ["/api/data", "/api/static"]
 
 [retry_strategy]
 max_delay_secs = 2
