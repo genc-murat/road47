@@ -1,4 +1,4 @@
-use futures::future::{self, select_ok};
+use futures::future::select_ok;
 use std::io::{self, Error, ErrorKind};
 use std::ops::Mul;
 use std::pin::Pin;
