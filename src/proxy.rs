@@ -6,8 +6,10 @@ use road47::cache::Cache;
 use road47::tcp_connection_manager::TcpConnectionManager;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
+use tokio::net::tcp::{ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
@@ -83,29 +85,22 @@ async fn proxy_connection(
 ) -> io::Result<()> {
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
 
-    // Check if the requested endpoint is eligible for caching and if a cached response is available
     if let Some(ref cache_enabled_endpoints) = cache_enabled_endpoints {
         if cache_enabled_endpoints.contains(&requested_endpoint) {
             // Lock the cache asynchronously to ensure safe concurrent access
             let mut cache_lock = cache.lock().await;
             if let Some(cached_data) = cache_lock.get(&requested_endpoint) {
-                // Verinin bir klonunu al. Bu, `cached_data` üzerinde sahiplik gerektirmeyen bir işlem yapar.
                 let data_clone = cached_data.clone();
 
-                // `cache_lock`'ı açıkça bırak. Bu, async operasyonlardan önce kilit nesnesini serbest bırakır.
                 drop(cache_lock);
 
-                // Klonlanmış veriyi gönder.
                 return send_cached_response(incoming, &data_clone).await;
             }
         }
     }
 
-    // If no cached response is available, or the endpoint is not eligible for caching,
-    // proceed with establishing a target connection and proxying.
     let target = connect_to_target(&pool, timeout, target_addr).await?;
 
-    // Proxy the incoming connection to the target and vice versa
     let result = proxy_traffic_and_cache_response(
         incoming,
         target,
@@ -200,9 +195,9 @@ async fn proxy_traffic_and_cache_response(
     mut target: TcpStream,
     target_addr: &str,
     connection_counts: &Arc<Mutex<HashMap<String, usize>>>,
-    cache: Arc<Mutex<Cache>>,                      // Önbellek referansı
-    requested_endpoint: String,                    // Önbelleğe eklenecek veri için endpoint
-    cache_enabled_endpoints: &Option<Vec<String>>, // Önbelleğe alma işleminin etkin olduğu endpointler
+    cache: Arc<Mutex<Cache>>,
+    requested_endpoint: String,
+    cache_enabled_endpoints: &Option<Vec<String>>,
 ) -> io::Result<()> {
     // Increment connection count
     {
@@ -220,6 +215,37 @@ async fn proxy_traffic_and_cache_response(
         Err(e) => warn!("Proxy operation failed for {}: {:?}", target_addr, e),
     }
 
+    let mut target_response_buffer = Vec::new(); // Hedef sunucudan gelen yanıt için buffer
+
+    // Hedef sunucuya veri aktarımı ve hedef sunucudan yanıtı okuma
+    let proxy_result = tokio::try_join!(
+        tokio::io::copy(&mut ri, &mut wo),
+        read_and_write(&mut ro, &mut wi, &mut target_response_buffer),
+    );
+
+    if let Ok(_) = proxy_result {
+        // Yanıt verisini ve HTTP durum kodunu analiz edin (Basitleştirilmiş bir işlem için)
+
+        // Önbelleğe alma koşulları sağlanıyorsa önbelleğe ekle
+        if cache_enabled_endpoints
+            .as_ref()
+            .map_or(false, |eps| eps.contains(&requested_endpoint))
+        {
+            let mut cache_lock = cache.lock().await;
+            cache_lock.put(requested_endpoint, target_response_buffer);
+        }
+
+        info!(
+            "Proxy and cache operation completed successfully for {}",
+            target_addr
+        );
+    } else {
+        warn!(
+            "Proxy operation failed for {}: {:?}",
+            target_addr,
+            proxy_result.err().unwrap()
+        );
+    }
     // Decrement connection count
     {
         let mut counts = connection_counts.lock().await;
@@ -227,17 +253,27 @@ async fn proxy_traffic_and_cache_response(
             *count = count.saturating_sub(1);
         }
     }
-    let response_data = Vec::new(); // Hedef sunucudan alınan yanıt verisini temsil eder
-                                    // Not: Bu örnekte response_data'nın nasıl doldurulacağı gösterilmemektedir.
-                                    // Gerçek uygulamada, hedef sunucudan alınan yanıtın içeriğini buraya eklemelisiniz.
+    Ok(())
+}
 
-    // Eğer endpoint önbelleğe alma için uygunsa ve yanıt verisi varsa, önbelleğe ekle
-    if let Some(ref enabled_endpoints) = *cache_enabled_endpoints {
-        if enabled_endpoints.contains(&requested_endpoint) {
-            let mut cache_lock = cache.lock().await;
-            cache_lock.put(requested_endpoint.clone(), response_data);
+async fn read_and_write(
+    reader: &mut ReadHalf<'_>,
+    writer: &mut WriteHalf<'_>,
+    buffer: &mut Vec<u8>,
+) -> io::Result<u64> {
+    let mut buf = [0; 4096];
+    let mut total_written = 0;
+
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            break;
         }
+
+        buffer.extend_from_slice(&buf[0..n]);
+        writer.write_all(&buf[0..n]).await?;
+        total_written += n as u64;
     }
 
-    Ok(())
+    Ok(total_written)
 }
