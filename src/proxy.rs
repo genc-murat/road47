@@ -24,7 +24,7 @@ pub async fn accept_connections(
     request_limits: Arc<Mutex<HashMap<String, usize>>>,
     max_requests_per_target: Option<usize>,
     resource_endpoints: Option<Arc<Mutex<Vec<String>>>>,
-    cache: Arc<Mutex<Cache>>, // Add cache parameter
+    cache: Arc<Mutex<Cache>>,
     cache_enabled_endpoints: Option<Vec<String>>,
     target_weights: Option<HashMap<String, usize>>,
 ) -> io::Result<()> {
@@ -80,7 +80,7 @@ async fn proxy_connection(
     timeout: Duration,
     connection_counts: Arc<Mutex<HashMap<String, usize>>>,
     pool: Arc<Pool<TcpConnectionManager>>,
-    cache: Arc<Mutex<Cache>>, // Cache is already wrapped in Arc<Mutex<..>>
+    cache: Arc<Mutex<Cache>>, // Cache is now correctly wrapped in an async Mutex
     cache_enabled_endpoints: Option<Vec<String>>,
 ) -> io::Result<()> {
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
@@ -88,17 +88,16 @@ async fn proxy_connection(
     if let Some(ref cache_enabled_endpoints) = cache_enabled_endpoints {
         if cache_enabled_endpoints.contains(&requested_endpoint) {
             // Lock the cache asynchronously to ensure safe concurrent access
-            let mut cache_lock = cache.lock().await;
-            if let Some(cached_data) = cache_lock.get(&requested_endpoint) {
-                let data_clone = cached_data.clone();
-
-                drop(cache_lock);
-
-                return send_cached_response(incoming, &data_clone).await;
+            let cache_lock = cache.lock().await; // Artık doğru şekilde asenkron bir kilit kullanılıyor
+            if let Some(cached_data) = cache_lock.get(&requested_endpoint).await {
+                // .await eklenmeli
+                // Cached data found, send response
+                return send_cached_response(incoming, &cached_data).await;
             }
         }
     }
 
+    // No cached data found or caching not enabled for this endpoint, proceed with normal flow
     let target = connect_to_target(&pool, timeout, target_addr).await?;
 
     let result = proxy_traffic_and_cache_response(
@@ -106,7 +105,7 @@ async fn proxy_connection(
         target,
         target_addr,
         &connection_counts,
-        cache.clone(),
+        cache.clone(), // Pass cache clone to the function
         requested_endpoint.clone(),
         &cache_enabled_endpoints,
     )

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 
 pub struct CacheEntry {
     value: Vec<u8>,
@@ -27,7 +28,7 @@ impl CacheEntry {
 }
 
 pub struct Cache {
-    entries: RwLock<HashMap<String, CacheEntry>>,
+    entries: Arc<RwLock<HashMap<String, CacheEntry>>>,
     ttl: Duration,
     capacity: usize,
 }
@@ -35,15 +36,15 @@ pub struct Cache {
 impl Cache {
     pub fn new(ttl_seconds: u64, capacity: usize) -> Self {
         Cache {
-            entries: RwLock::new(HashMap::new()),
+            entries: Arc::new(RwLock::new(HashMap::new())),
             ttl: Duration::from_secs(ttl_seconds),
             capacity,
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<Vec<u8>> {
+    pub async fn get(&self, key: &str) -> Option<Vec<u8>> {
         let now = Instant::now();
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write().await;
         if let Some(entry) = entries.get_mut(key) {
             if entry.is_expired(now) {
                 entries.remove(key);
@@ -55,21 +56,22 @@ impl Cache {
         None
     }
 
-    pub fn put(&self, key: String, value: Vec<u8>) {
+    pub async fn put(&self, key: String, value: Vec<u8>) {
         let now = Instant::now();
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write().await;
 
-        let remove_key = if entries.len() == self.capacity && !entries.contains_key(&key) {
-            entries
+        entries.retain(|_, v| !v.is_expired(now));
+
+        if entries.len() >= self.capacity && !entries.contains_key(&key) {
+            let lru_key = entries
                 .iter()
-                .min_by_key(|(_, e)| e.last_accessed)
-                .map(|(k, _)| k.clone())
-        } else {
-            None
-        };
+                .filter(|(_, entry)| !entry.is_expired(now))
+                .min_by_key(|(_, entry)| entry.last_accessed)
+                .map(|(k, _)| k.clone());
 
-        if let Some(k) = remove_key {
-            entries.remove(&k);
+            if let Some(k) = lru_key {
+                entries.remove(&k);
+            }
         }
 
         entries.insert(key, CacheEntry::new(value, self.ttl, now));
