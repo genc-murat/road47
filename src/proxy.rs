@@ -78,7 +78,7 @@ async fn proxy_connection(
     timeout: Duration,
     connection_counts: Arc<Mutex<HashMap<String, usize>>>,
     pool: Arc<Pool<TcpConnectionManager>>,
-    cache: Arc<Mutex<Cache>>,
+    cache: Arc<Mutex<Cache>>, // Cache is already wrapped in Arc<Mutex<..>>
     cache_enabled_endpoints: Option<Vec<String>>,
 ) -> io::Result<()> {
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
@@ -86,22 +86,38 @@ async fn proxy_connection(
     // Check if the requested endpoint is eligible for caching and if a cached response is available
     if let Some(ref cache_enabled_endpoints) = cache_enabled_endpoints {
         if cache_enabled_endpoints.contains(&requested_endpoint) {
-            let cache_clone = cache.clone();
-            let maybe_cached_response = {
-                let cache_lock = cache_clone.lock().await;
-                cache_lock.get(&requested_endpoint).cloned()
-            };
-            if let Some(cached_data) = maybe_cached_response {
-                return send_cached_response(incoming, &cached_data).await;
+            // Lock the cache asynchronously to ensure safe concurrent access
+            let mut cache_lock = cache.lock().await;
+            if let Some(cached_data) = cache_lock.get(&requested_endpoint) {
+                // Verinin bir klonunu al. Bu, `cached_data` üzerinde sahiplik gerektirmeyen bir işlem yapar.
+                let data_clone = cached_data.clone();
+
+                // `cache_lock`'ı açıkça bırak. Bu, async operasyonlardan önce kilit nesnesini serbest bırakır.
+                drop(cache_lock);
+
+                // Klonlanmış veriyi gönder.
+                return send_cached_response(incoming, &data_clone).await;
             }
         }
     }
 
-    // Proceed with establishing a target connection and proxying if no cache is available
+    // If no cached response is available, or the endpoint is not eligible for caching,
+    // proceed with establishing a target connection and proxying.
     let target = connect_to_target(&pool, timeout, target_addr).await?;
 
     // Proxy the incoming connection to the target and vice versa
-    proxy_traffic(incoming, target, target_addr, &connection_counts).await
+    let result = proxy_traffic_and_cache_response(
+        incoming,
+        target,
+        target_addr,
+        &connection_counts,
+        cache.clone(),
+        requested_endpoint.clone(),
+        &cache_enabled_endpoints,
+    )
+    .await;
+
+    result
 }
 
 async fn extract_endpoint_from_stream(stream: &mut TcpStream) -> io::Result<String> {
@@ -179,11 +195,14 @@ async fn connect_to_target(
     }
 }
 
-async fn proxy_traffic(
+async fn proxy_traffic_and_cache_response(
     mut incoming: TcpStream,
     mut target: TcpStream,
     target_addr: &str,
     connection_counts: &Arc<Mutex<HashMap<String, usize>>>,
+    cache: Arc<Mutex<Cache>>,                      // Önbellek referansı
+    requested_endpoint: String,                    // Önbelleğe eklenecek veri için endpoint
+    cache_enabled_endpoints: &Option<Vec<String>>, // Önbelleğe alma işleminin etkin olduğu endpointler
 ) -> io::Result<()> {
     // Increment connection count
     {
@@ -206,6 +225,17 @@ async fn proxy_traffic(
         let mut counts = connection_counts.lock().await;
         if let Some(count) = counts.get_mut(target_addr) {
             *count = count.saturating_sub(1);
+        }
+    }
+    let response_data = Vec::new(); // Hedef sunucudan alınan yanıt verisini temsil eder
+                                    // Not: Bu örnekte response_data'nın nasıl doldurulacağı gösterilmemektedir.
+                                    // Gerçek uygulamada, hedef sunucudan alınan yanıtın içeriğini buraya eklemelisiniz.
+
+    // Eğer endpoint önbelleğe alma için uygunsa ve yanıt verisi varsa, önbelleğe ekle
+    if let Some(ref enabled_endpoints) = *cache_enabled_endpoints {
+        if enabled_endpoints.contains(&requested_endpoint) {
+            let mut cache_lock = cache.lock().await;
+            cache_lock.put(requested_endpoint.clone(), response_data);
         }
     }
 

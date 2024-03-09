@@ -41,6 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let cache = Arc::new(Mutex::new(Cache::new(
             route.cache_ttl_seconds.unwrap_or_default(),
+            route.cache_capacity.unwrap_or_default(),
         )));
         let cache_enabled_endpoints = route.cache_enabled_endpoints.clone();
         let target_weights = route.target_weights.as_ref().map(|tw| tw.clone());
