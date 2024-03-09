@@ -226,8 +226,11 @@ async fn proxy_traffic_and_cache_response(
             .as_ref()
             .map_or(false, |eps| eps.contains(&requested_endpoint))
         {
-            let mut cache_lock = cache.lock().await;
-            cache_lock.put(requested_endpoint, target_response_buffer);
+            let cache_lock = cache.lock().await;
+            // Await the cache_lock.put() function call
+            cache_lock
+                .put(requested_endpoint, target_response_buffer)
+                .await;
         }
 
         info!(
