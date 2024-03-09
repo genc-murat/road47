@@ -34,7 +34,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let connection_counts = Arc::new(Mutex::new(HashMap::new()));
         let request_limits = Arc::new(Mutex::new(HashMap::new()));
         let max_requests_per_target = route.max_requests_per_target;
-        let resource_endpoints = Arc::new(Mutex::new(route.resource_endpoints));
+        let resource_endpoints = match route.resource_endpoints {
+            Some(endpoints) => Some(Arc::new(Mutex::new(endpoints))),
+            None => None,
+        };
 
         let cache = Arc::new(Mutex::new(Cache::new(
             route.cache_ttl_seconds.unwrap_or_default(),

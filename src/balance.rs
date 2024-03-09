@@ -31,7 +31,7 @@ pub enum BalanceStrategy {
 fn calculate_dynamic_limit(addr: &String, connection_counts: &HashMap<String, usize>) -> usize {
     let current_connections = connection_counts.get(addr).unwrap_or(&0);
     if *current_connections > 100 {
-        50 
+        50
     } else {
         100
     }
@@ -54,8 +54,8 @@ impl BalanceStrategy {
         target_addrs: Arc<Mutex<VecDeque<String>>>,
         connection_counts: Arc<Mutex<HashMap<String, usize>>>,
         request_limits: Arc<Mutex<HashMap<String, usize>>>,
-        max_requests_per_target: usize,
-        resource_endpoints: Arc<Mutex<Vec<String>>>,
+        max_requests_per_target: Option<usize>,
+        resource_endpoints: Option<Arc<Mutex<Vec<String>>>>,
         target_weights: Option<HashMap<String, usize>>,
     ) -> Option<String> {
         let mut addrs = target_addrs.lock().await;
@@ -94,14 +94,21 @@ impl BalanceStrategy {
             BalanceStrategy::RateLimiting => {
                 for addr in addrs.iter() {
                     let count = limits.entry(addr.clone()).or_insert(0);
-                    if *count < max_requests_per_target {
-                        *count += 1; // İstek sayısını artır
-                        return Some(addr.clone());
+                    if let Some(max_requests) = max_requests_per_target {
+                        if *count < max_requests {
+                            *count += 1; // İstek sayısını artır
+                            return Some(addr.clone());
+                        }
                     }
                 }
                 None
             }
             BalanceStrategy::ResourceBased => {
+                let resource_endpoints = match resource_endpoints {
+                    Some(endpoints) => endpoints,
+                    None => return None, // Early return if resource_endpoints is None
+                };
+
                 let endpoints = resource_endpoints.lock().await;
                 let mut scores = Vec::new();
                 for (index, endpoint) in endpoints.iter().enumerate() {

@@ -20,10 +20,10 @@ pub async fn accept_connections(
     balance_strategy: BalanceStrategy,
     connection_counts: Arc<Mutex<HashMap<String, usize>>>,
     request_limits: Arc<Mutex<HashMap<String, usize>>>,
-    max_requests_per_target: usize,
-    resource_endpoints: Arc<Mutex<Vec<String>>>,
+    max_requests_per_target: Option<usize>,
+    resource_endpoints: Option<Arc<Mutex<Vec<String>>>>,
     cache: Arc<Mutex<Cache>>, // Add cache parameter
-    cache_enabled_endpoints: Vec<String>,
+    cache_enabled_endpoints: Option<Vec<String>>,
     target_weights: Option<HashMap<String, usize>>,
 ) -> io::Result<()> {
     while let Ok((incoming, _)) = listener.accept().await {
@@ -79,19 +79,21 @@ async fn proxy_connection(
     connection_counts: Arc<Mutex<HashMap<String, usize>>>,
     pool: Arc<Pool<TcpConnectionManager>>,
     cache: Arc<Mutex<Cache>>,
-    cache_enabled_endpoints: Vec<String>,
+    cache_enabled_endpoints: Option<Vec<String>>,
 ) -> io::Result<()> {
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
 
     // Check if the requested endpoint is eligible for caching and if a cached response is available
-    if cache_enabled_endpoints.contains(&requested_endpoint) {
-        let cache_clone = cache.clone();
-        let maybe_cached_response = {
-            let cache_lock = cache_clone.lock().await;
-            cache_lock.get(&requested_endpoint).cloned()
-        };
-        if let Some(cached_data) = maybe_cached_response {
-            return send_cached_response(incoming, &cached_data).await;
+    if let Some(ref cache_enabled_endpoints) = cache_enabled_endpoints {
+        if cache_enabled_endpoints.contains(&requested_endpoint) {
+            let cache_clone = cache.clone();
+            let maybe_cached_response = {
+                let cache_lock = cache_clone.lock().await;
+                cache_lock.get(&requested_endpoint).cloned()
+            };
+            if let Some(cached_data) = maybe_cached_response {
+                return send_cached_response(incoming, &cached_data).await;
+            }
         }
     }
 
