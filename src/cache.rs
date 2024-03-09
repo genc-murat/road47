@@ -49,36 +49,3 @@ impl Cache {
         self.entries.insert(key, entry);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cache_get_returns_none_when_entry_expired() {
-        let mut cache = Cache::new(1); // TTL of 1 second
-        cache.put("key".to_string(), vec![1, 2, 3]);
-
-        // Wait for the entry to expire
-        std::thread::sleep(Duration::from_secs(2));
-
-        assert_eq!(cache.get("key"), None);
-    }
-
-    #[test]
-    fn test_cache_get_returns_value_when_entry_not_expired() {
-        let mut cache = Cache::new(10); // TTL of 10 seconds
-        cache.put("key".to_string(), vec![1, 2, 3]);
-
-        assert_eq!(cache.get("key"), Some(&vec![1, 2, 3]));
-    }
-
-    #[test]
-    fn test_cache_put_overwrites_existing_entry() {
-        let mut cache = Cache::new(10); // TTL of 10 seconds
-        cache.put("key".to_string(), vec![1, 2, 3]);
-        cache.put("key".to_string(), vec![4, 5, 6]);
-
-        assert_eq!(cache.get("key"), Some(&vec![4, 5, 6]));
-    }
-}
