@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub struct CacheEntry {
@@ -20,8 +21,8 @@ impl CacheEntry {
 }
 
 pub struct Cache {
-    entries: HashMap<String, CacheEntry>,
-    keys: VecDeque<String>,
+    entries: Mutex<HashMap<String, CacheEntry>>,
+    keys: Mutex<VecDeque<String>>,
     ttl: Duration,
     capacity: usize,
 }
@@ -29,39 +30,42 @@ pub struct Cache {
 impl Cache {
     pub fn new(ttl_seconds: u64, capacity: usize) -> Self {
         Cache {
-            entries: HashMap::new(),
-            keys: VecDeque::new(),
+            entries: Mutex::new(HashMap::new()),
+            keys: Mutex::new(VecDeque::new()),
             ttl: Duration::from_secs(ttl_seconds),
             capacity,
         }
     }
 
-    pub fn get(&mut self, key: &str) -> Option<&Vec<u8>> {
+    pub fn get(&self, key: &str) -> Option<Vec<u8>> {
         let now = Instant::now();
-        if let Some(entry) = self.entries.get(key) {
+        let mut entries = self.entries.lock().unwrap();
+        if let Some(entry) = entries.get(key) {
             if entry.is_expired(now) {
-                self.entries.remove(key);
-                self.keys.retain(|k| k != key);
+                entries.remove(key);
+                self.keys.lock().unwrap().retain(|k| k != key);
                 return None;
             }
         }
 
-        if self.entries.contains_key(key) {
+        if entries.contains_key(key) {
             self.mark_recently_used(key);
-            return self.entries.get(key).map(|e| &e.value);
+            return entries.get(key).map(|e| e.value.clone());
         }
         None
     }
 
-    pub fn put(&mut self, key: String, value: Vec<u8>) {
+    pub fn put(&self, key: String, value: Vec<u8>) {
         let now = Instant::now();
         let entry = CacheEntry::new(value, self.ttl, now);
+        let mut entries = self.entries.lock().unwrap();
 
-        if self.entries.insert(key.clone(), entry).is_none() {
-            self.keys.push_front(key.clone());
-            if self.keys.len() > self.capacity {
-                if let Some(oldest) = self.keys.pop_back() {
-                    self.entries.remove(&oldest);
+        if entries.insert(key.clone(), entry).is_none() {
+            let mut keys = self.keys.lock().unwrap();
+            keys.push_front(key.clone());
+            if keys.len() > self.capacity {
+                if let Some(oldest) = keys.pop_back() {
+                    entries.remove(&oldest);
                 }
             }
         } else {
@@ -69,9 +73,11 @@ impl Cache {
         }
     }
 
-    fn mark_recently_used(&mut self, key: &str) {
-        let index = self.keys.iter().position(|k| k == key).unwrap();
-        let recent_key = self.keys.remove(index).unwrap();
-        self.keys.push_front(recent_key);
+    fn mark_recently_used(&self, key: &str) {
+        let mut keys = self.keys.lock().unwrap();
+        if let Some(index) = keys.iter().position(|k| k == key) {
+            let recent_key = keys.remove(index).unwrap();
+            keys.push_front(recent_key);
+        }
     }
 }
