@@ -1,10 +1,11 @@
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 pub struct CacheEntry {
     value: Vec<u8>,
     expiry: Instant,
+    last_accessed: Instant,
 }
 
 impl CacheEntry {
@@ -12,17 +13,21 @@ impl CacheEntry {
         CacheEntry {
             value,
             expiry: now + ttl,
+            last_accessed: now,
         }
     }
 
     pub fn is_expired(&self, now: Instant) -> bool {
         now > self.expiry
     }
+
+    pub fn update_last_accessed(&mut self, now: Instant) {
+        self.last_accessed = now;
+    }
 }
 
 pub struct Cache {
     entries: RwLock<HashMap<String, CacheEntry>>,
-    keys: RwLock<VecDeque<String>>,
     ttl: Duration,
     capacity: usize,
 }
@@ -31,7 +36,6 @@ impl Cache {
     pub fn new(ttl_seconds: u64, capacity: usize) -> Self {
         Cache {
             entries: RwLock::new(HashMap::new()),
-            keys: RwLock::new(VecDeque::new()),
             ttl: Duration::from_secs(ttl_seconds),
             capacity,
         }
@@ -39,17 +43,15 @@ impl Cache {
 
     pub fn get(&self, key: &str) -> Option<Vec<u8>> {
         let now = Instant::now();
-        {
-            let entries = self.entries.read().unwrap();
-            if let Some(entry) = entries.get(key) {
-                if entry.is_expired(now) {
-                    drop(entries); // Lock'u elden çıkar, böylece write lock alınabilir.
-                    self.remove_entry(key);
-                    return None;
-                }
-                return Some(entry.value.clone());
+        let mut entries = self.entries.write().unwrap();
+        if let Some(entry) = entries.get_mut(key) {
+            if entry.is_expired(now) {
+                entries.remove(key);
+                return None;
             }
-        } // Okuma kilidinin erken serbest bırakılması için bu blok kullanılır.
+            entry.update_last_accessed(now);
+            return Some(entry.value.clone());
+        }
         None
     }
 
@@ -57,35 +59,19 @@ impl Cache {
         let now = Instant::now();
         let mut entries = self.entries.write().unwrap();
 
-        if entries
-            .insert(key.clone(), CacheEntry::new(value, self.ttl, now))
-            .is_none()
-        {
-            let mut keys = self.keys.write().unwrap();
-            keys.push_front(key.clone());
-            if keys.len() > self.capacity {
-                if let Some(oldest) = keys.pop_back() {
-                    entries.remove(&oldest);
-                }
-            }
+        let remove_key = if entries.len() == self.capacity && !entries.contains_key(&key) {
+            entries
+                .iter()
+                .min_by_key(|(_, e)| e.last_accessed)
+                .map(|(k, _)| k.clone())
         } else {
-            drop(entries); // Lock'u elden çıkarıp, mark_recently_used içinde yeniden alınmasını sağlayabiliriz.
-            self.mark_recently_used(&key);
-        }
-    }
+            None
+        };
 
-    fn mark_recently_used(&self, key: &str) {
-        let mut keys = self.keys.write().unwrap();
-        if let Some(index) = keys.iter().position(|k| k == key) {
-            let recent_key = keys.remove(index).unwrap();
-            keys.push_front(recent_key);
+        if let Some(k) = remove_key {
+            entries.remove(&k);
         }
-    }
 
-    fn remove_entry(&self, key: &str) {
-        let mut entries = self.entries.write().unwrap();
-        entries.remove(key);
-        let mut keys = self.keys.write().unwrap();
-        keys.retain(|k| k != key);
+        entries.insert(key, CacheEntry::new(value, self.ttl, now));
     }
 }
