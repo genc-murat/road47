@@ -215,18 +215,14 @@ async fn proxy_traffic_and_cache_response(
         Err(e) => warn!("Proxy operation failed for {}: {:?}", target_addr, e),
     }
 
-    let mut target_response_buffer = Vec::new(); // Hedef sunucudan gelen yanıt için buffer
+    let mut target_response_buffer = Vec::new();
 
-    // Hedef sunucuya veri aktarımı ve hedef sunucudan yanıtı okuma
     let proxy_result = tokio::try_join!(
         tokio::io::copy(&mut ri, &mut wo),
         read_and_write(&mut ro, &mut wi, &mut target_response_buffer),
     );
 
     if let Ok(_) = proxy_result {
-        // Yanıt verisini ve HTTP durum kodunu analiz edin (Basitleştirilmiş bir işlem için)
-
-        // Önbelleğe alma koşulları sağlanıyorsa önbelleğe ekle
         if cache_enabled_endpoints
             .as_ref()
             .map_or(false, |eps| eps.contains(&requested_endpoint))
