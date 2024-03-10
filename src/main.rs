@@ -7,6 +7,7 @@ use env_logger;
 use log::{error, info};
 use mobc::Pool;
 use road47::cache::Cache;
+use road47::config_manager::ConfigManager;
 use road47::health_checker::HealthChecker;
 use road47::tcp_connection_manager::TcpConnectionManager;
 use std::collections::{HashMap, VecDeque};
@@ -23,6 +24,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_contents = fs::read_to_string("Config.toml")?;
     let config: Config = toml::from_str(&config_contents)?;
+
+    let config_path = "Config.toml".to_string();
+    let mut config_manager = ConfigManager::new(&config_path).await;
+    tokio::spawn(async move {
+        config_manager.run(config_path).await;
+    });
 
     let health_checker = Arc::new(HealthChecker::new());
     let health_statuses = Arc::new(Mutex::new(HashMap::<String, bool>::new()));
