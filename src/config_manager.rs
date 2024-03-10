@@ -1,9 +1,11 @@
 use crate::config::Config;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::fs;
+use tokio::sync::RwLock;
 use tokio::time::interval;
 
+#[derive(Clone)]
 pub struct ConfigManager {
     config: Arc<RwLock<Config>>,
     last_modified: SystemTime,
@@ -28,7 +30,19 @@ impl ConfigManager {
         }
     }
 
-    pub async fn run(&mut self, config_path: String) {
+    pub async fn load(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let metadata = fs::metadata(config_path).await?;
+        let last_modified = metadata.modified()?;
+        let config_contents = fs::read_to_string(config_path).await?;
+        let config: Config = toml::from_str(&config_contents)?;
+
+        Ok(Self {
+            config: Arc::new(RwLock::new(config)),
+            last_modified,
+        })
+    }
+
+    pub async fn run(&self, config_path: String) {
         let mut interval = interval(Duration::from_secs(5));
         loop {
             interval.tick().await;
@@ -41,17 +55,22 @@ impl ConfigManager {
                 Err(_) => continue,
             };
             if modified > self.last_modified {
-                println!("Yapılandırma dosyası değişti, yeniden yükleniyor...");
-                self.last_modified = modified;
+                println!("The configuration file has changed, reloading...");
                 let config_contents = fs::read_to_string(&config_path)
                     .await
                     .expect("Failed to read config file");
                 let config: Config =
                     toml::from_str(&config_contents).expect("Failed to parse config");
-                let mut config_lock = self.config.write().unwrap();
+
+                let mut config_lock = self.config.write().await;
                 *config_lock = config;
-                println!("Yapılandırma başarıyla yeniden yüklendi.");
+                println!("The configuration has been successfully reloaded.");
             }
         }
+    }
+
+    pub async fn get_config(&self) -> Config {
+        let config_lock = self.config.read().await;
+        (*config_lock).clone()
     }
 }

@@ -2,7 +2,6 @@ mod balance;
 mod config;
 mod proxy;
 use crate::balance::BalanceStrategy;
-use crate::config::Config;
 use env_logger;
 use log::{error, info};
 use mobc::Pool;
@@ -11,7 +10,6 @@ use road47::config_manager::ConfigManager;
 use road47::health_checker::HealthChecker;
 use road47::tcp_connection_manager::TcpConnectionManager;
 use std::collections::{HashMap, VecDeque};
-use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
@@ -22,17 +20,16 @@ use tokio::time::interval;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let config_contents = fs::read_to_string("Config.toml")?;
-    let config: Config = toml::from_str(&config_contents)?;
-
-    let config_path = "Config.toml".to_string();
-    let mut config_manager = ConfigManager::new(&config_path).await;
-    tokio::spawn(async move {
-        config_manager.run(config_path).await;
-    });
+    let config_manager = ConfigManager::load("Config.toml").await?;
+    let config = config_manager.get_config().await;
 
     let health_checker = Arc::new(HealthChecker::new());
     let health_statuses = Arc::new(Mutex::new(HashMap::<String, bool>::new()));
+
+    let config_manager_clone = config_manager.clone();
+    tokio::spawn(async move {
+        config_manager_clone.run("Config.toml".to_string()).await;
+    });
 
     for route in config.route {
         let timeout = Duration::from_secs(route.timeout_seconds);

@@ -1,13 +1,13 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
     pub route: Vec<Route>,
     pub retry_strategy: RetryStrategyConfig,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct RetryStrategyConfig {
     pub max_delay_secs: u64,
     pub max_attempts: usize,
@@ -15,7 +15,7 @@ pub struct RetryStrategyConfig {
     pub timeout_secs: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Route {
     pub listen_addr: String,
     pub target_addrs: Vec<String>,
