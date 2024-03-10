@@ -4,79 +4,63 @@
     <img src="/road47logo.png">
 </div>
 
-Road47 is a versatile and high-performance proxy server designed to efficiently manage and route TCP connections across multiple backend services. Built with scalability and flexibility in mind, it offers a wide array of features tailored for modern cloud architectures, including dynamic load balancing, connection pooling, rate limiting, and resource-based routing. Road47 is ideal for applications requiring high availability, fault tolerance, and seamless integration with microservices environments.
+# Road47: A High-Performance, Rust-Based Load Balancer and Proxy
+
+Road47 is an innovative, feature-rich load balancer and proxy solution designed to optimize the distribution of traffic across multiple servers, ensuring high availability and reliability of services. Written in Rust, Road47 leverages the language's safety, performance, and concurrency features, making it an ideal choice for handling high-throughput and low-latency network applications. This document provides a comprehensive overview of Road47's capabilities, architecture, and how to get started with it.
 
 ## Features
 
-- **Dynamic Load Balancing**: Supports various strategies such as Round Robin, Random, Least Connections, Rate Limiting, and Resource-Based to distribute traffic evenly across your services.
-- **Connection Pooling**: Utilizes a connection pool to manage and reuse TCP connections, reducing latency and improving the efficiency of resource utilization.
-- **Rate Limiting**: Enforces maximum request limits per target, preventing overloading of services and ensuring fair resource allocation.
-- **Resource-Based Routing**: Selects targets based on their current resource usage (CPU, memory), enabling smarter routing decisions for optimized performance.
-- **Caching**: Integrates an in-memory cache to store and serve frequently accessed data, significantly reducing response times and backend load.
-- **Intelligent Health Checking**: Continuously monitors the health of backend servers to ensure traffic is only routed to operational servers, thereby enhancing the reliability and uptime of services.
-- **Configurable and Extensible**: Easy to configure through TOML files, allowing quick setup and adjustments according to your infrastructure needs.
-- **High Performance and Scalability**: Designed with performance in mind, Road47 can handle high volumes of concurrent connections and is scalable to meet the demands of growing applications.
-- **Weighted Round Robin**: Distributes requests based on predefined weights assigned to each backend service, allowing more requests to be routed to higher-capacity or higher-priority services.
-- **Dynamic Rate Limiting**: Adjusts request limits in real-time based on current load or other metrics, enabling more flexible and responsive load handling.
+- **Load Balancing Strategies**: Supports multiple algorithms including Round Robin, Random, Least Connections, Rate Limiting, Resource-Based, Weighted Round Robin, Dynamic Rate Limiting, and IP Hash, allowing administrators to choose the most suitable strategy based on their specific use case.
+- **Dynamic Configuration**: Configuration can be updated on the fly without restarting the service, minimizing downtime and enabling seamless adjustments to changing load patterns.
+- **Resource Usage Monitoring**: Integrates with endpoints to monitor CPU and memory usage, enabling Resource-Based balancing decisions that consider the current load on target servers.
+- **Connection Management**: Maintains connection counts and enforces request limits per target, with support for dynamic rate limiting based on current load, ensuring fair resource allocation and preventing server overload.
+- **Health Checking**: Periodically checks the health of target servers to ensure traffic is only routed to healthy instances, enhancing the overall reliability of the service.
+- **Caching**: Implements an LRU (Least Recently Used) cache to store and serve frequently accessed data, reducing latency and offloading traffic from backend servers.
+- **Retry Strategies**: Offers configurable retry logic that includes exponential backoff and timeout settings, improving the resilience of the system in the face of temporary network failures or server unavailability.
+- **TCP Connection Management**: Utilizes a custom TCP connection manager to efficiently manage connections to backend servers, including support for connection pooling and retry strategies for failed connection attempts.
+- **Async/Await Support**: Fully asynchronous architecture powered by Tokio, enabling non-blocking I/O operations that scale efficiently across cores.
+- **Logging and Monitoring**: Comprehensive logging for debugging and monitoring, facilitating the diagnosis of issues and performance optimization.
+
+## Architecture
+
+Road47 is architectured around a set of core components that work together to ensure efficient load distribution and high availability:
+
+- **Balance Strategies**: Modular strategy implementations that can be dynamically selected based on configuration.
+- **Config Manager**: Watches configuration files for changes and reloads the configuration without restarting the service.
+- **Health Checker**: Periodically checks the health of backend services and updates their availability status.
+- **Cache**: An LRU cache for storing responses from backend services to improve response times for frequently accessed data.
+- **TCP Connection Manager**: Manages pool of connections to backend services, implementing retry logic and connection health checks.
+- **Proxy**: Accepts incoming connections, selects a target based on the configured load balancing strategy, and forwards the request while handling retries, caching, and connection management.
 
 ## Getting Started
 
-### Prerequisites
+1. **Prerequisites**:
+   - Rust and Cargo installed on your machine.
+   - Configuration file (`Config.toml`) prepared according to your environment and requirements.
 
-- Rust and Cargo installed on your system.
-- Tokio runtime for asynchronous operations.
+2. **Installation**:
+   Clone the repository and build the project using Cargo:
+   ```bash
+   git clone https://github.com/genc-murat/road47.git
+   cd road47
+   cargo build --release
+   ```
 
-### Installation
+3. **Configuration**:
+   Edit the `Config.toml` file to set up your routes, load balancing strategies, target servers, and other settings like health check endpoints, retry strategies, and cache configurations.
 
-1. Clone the repository:
+4. **Running Road47**:
+   Start the Road47 service with:
+   ```bash
+   cargo run --release
+   ```
 
-```bash
-git clone https://github.com/genc-murat/road47.git
-cd road47
-```
+5. **Monitoring and Logging**:
+   Monitor the logs for any errors or important messages. Adjust the log level in the configuration file or environment variables to control the verbosity.
 
-2. Build the project:
+## Conclusion
 
-```bash
-cargo build --release
-```
-
-3. Configure `Config.toml` according to your requirements. Example configurations are provided in the `examples` directory.
-
-4. Run Road47:
-
-```bash
-cargo run --release
-```
-
-## Configuration
-
-Road47 is configured through a TOML file (`Config.toml`). Here's a basic example:
-
-```toml
-[[route]]
-listen_addr = "0.0.0.0:8080"
-target_addrs = ["127.0.0.1:8081", "127.0.0.1:8082"]
-balance_strategy = "roundrobin"
-timeout_seconds = 5
-max_requests_per_target = 100
-cache_ttl_seconds = 60
-cache_enabled_endpoints = ["/api/v1/data"]
-```
-
-- `listen_addr`: The address on which Road47 listens for incoming connections.
-- `target_addrs`: A list of backend services to which Road47 routes traffic.
-- `balance_strategy`: Load balancing strategy (e.g., `roundrobin`, `random`, `leastconnections`, `ratelimiting`, `resourcebased`).
-- `timeout_seconds`: Connection timeout in seconds.
-- `max_requests_per_target`: Maximum number of concurrent requests per target service.
-- `cache_ttl_seconds`: Time-to-live for cached entries, in seconds.
-- `cache_enabled_endpoints`: List of endpoints for which caching is enabled.
-
-## Usage
-
-Once configured and running, Road47 will start accepting connections on the specified `listen_addr` and route them according to the defined rules and strategies.
-
-For detailed usage and advanced configurations, refer to the documentation in the `docs` directory.
+Road47 stands out as a powerful, flexible solution for modern load balancing and proxying needs. Its use of Rust ensures that it is not only efficient and fast but also safe and reliable. Whether you're handling microservices architecture, a large distributed system, or simply need a high-performance reverse proxy, Road47 offers the features and flexibility to support your infrastructure's needs.
 
 ## Contributing
 
