@@ -29,7 +29,8 @@ pub async fn accept_connections(
     target_weights: Option<HashMap<String, usize>>,
     health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
 ) -> io::Result<()> {
-    while let Ok((incoming, _)) = listener.accept().await {
+    while let Ok((incoming, addr)) = listener.accept().await {
+        let client_ip = Some(addr.ip().to_string());
         let target_addrs_clone = Arc::clone(&target_addrs);
         let timeout_clone = timeout;
         let connection_counts_clone = Arc::clone(&connection_counts);
@@ -47,6 +48,11 @@ pub async fn accept_connections(
         tokio::spawn(async move {
             let connection_counts_clone_for_proxy = Arc::clone(&connection_counts_clone);
 
+            let client_ip_for_strategy = match balance_strategy {
+                BalanceStrategy::IPHash => client_ip.clone(),
+                _ => None,
+            };
+
             if let Some(target_addr) = balance_strategy
                 .select_target(
                     target_addrs_clone,
@@ -56,6 +62,7 @@ pub async fn accept_connections(
                     resource_endpoints_clone,
                     target_weights_clone,
                     health_statuses_clone,
+                    client_ip_for_strategy,
                 )
                 .await
             {

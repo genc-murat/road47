@@ -3,8 +3,10 @@ use rand::Rng;
 use reqwest::Error;
 use serde::Deserialize;
 use std::collections::{HashMap, VecDeque};
+use std::hash::Hasher;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use twox_hash::XxHash64;
 
 #[derive(Deserialize, Clone, Debug)]
 struct ResourceUsage {
@@ -27,6 +29,7 @@ pub enum BalanceStrategy {
     ResourceBased,
     WeightedRoundRobin,
     DynamicRateLimiting,
+    IPHash,
 }
 fn calculate_dynamic_limit(addr: &String, connection_counts: &HashMap<String, usize>) -> usize {
     let current_connections = connection_counts.get(addr).unwrap_or(&0);
@@ -45,6 +48,7 @@ impl BalanceStrategy {
             "resourcebased" => BalanceStrategy::ResourceBased,
             "weightedroundrobin" => BalanceStrategy::WeightedRoundRobin,
             "dynamicratelimiting" => BalanceStrategy::DynamicRateLimiting,
+            "iphash" => BalanceStrategy::IPHash,
             _ => BalanceStrategy::RoundRobin,
         }
     }
@@ -58,6 +62,7 @@ impl BalanceStrategy {
         resource_endpoints: Option<Arc<Mutex<Vec<String>>>>,
         target_weights: Option<HashMap<String, usize>>,
         health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
+        client_ip: Option<String>,
     ) -> Option<String> {
         let filtered_addrs = {
             let lock = target_addrs.lock().await;
@@ -150,7 +155,6 @@ impl BalanceStrategy {
 
                 None
             }
-
             BalanceStrategy::DynamicRateLimiting => {
                 let counts = connection_counts.lock().await;
                 filtered_addrs
@@ -166,6 +170,23 @@ impl BalanceStrategy {
                         }
                     })
                     .next()
+            }
+            BalanceStrategy::IPHash => {
+                if let Some(ip) = client_ip {
+                    let mut hasher = XxHash64::with_seed(0);
+                    hasher.write(ip.as_bytes());
+                    let ip_hash = hasher.finish();
+
+                    let lock = target_addrs.lock().await;
+                    let addrs_len = lock.len();
+                    if addrs_len == 0 {
+                        None
+                    } else {
+                        lock.get((ip_hash as usize) % addrs_len).cloned()
+                    }
+                } else {
+                    None
+                }
             }
         }
     }
