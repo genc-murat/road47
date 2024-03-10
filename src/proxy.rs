@@ -27,28 +27,37 @@ pub async fn accept_connections(
     cache: Arc<Mutex<Cache>>,
     cache_enabled_endpoints: Option<Vec<String>>,
     target_weights: Option<HashMap<String, usize>>,
+    health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>, // This is already Option<Arc<...>>
 ) -> io::Result<()> {
     while let Ok((incoming, _)) = listener.accept().await {
-        let target_addrs_clone = target_addrs.clone();
+        let target_addrs_clone = Arc::clone(&target_addrs);
         let timeout_clone = timeout;
-        let connection_counts_clone = connection_counts.clone();
-        let request_limits_clone = request_limits.clone();
-        let resource_endpoints_clone = resource_endpoints.clone();
+        let connection_counts_clone = Arc::clone(&connection_counts);
+        let request_limits_clone = Arc::clone(&request_limits);
 
-        let pool_clone = pool.clone();
+        // Correctly clone Arc inside Option
+        let resource_endpoints_clone = resource_endpoints.as_ref().map(Arc::clone);
 
-        let cache_clone = cache.clone(); // Clone the cache for the spawned task
+        let pool_clone = Arc::clone(&pool);
+        let cache_clone = Arc::clone(&cache);
         let cache_enabled_endpoints_clone = cache_enabled_endpoints.clone();
         let target_weights_clone = target_weights.clone();
+
+        // Correctly clone Arc inside Option
+        let health_statuses_clone = health_statuses.as_ref().map(Arc::clone);
+
         tokio::spawn(async move {
+            let connection_counts_clone_for_proxy = Arc::clone(&connection_counts_clone);
+
             if let Some(target_addr) = balance_strategy
                 .select_target(
-                    target_addrs_clone.clone(),
-                    connection_counts_clone.clone(),
-                    request_limits_clone.clone(),
+                    target_addrs_clone,
+                    connection_counts_clone,
+                    request_limits_clone,
                     max_requests_per_target,
-                    resource_endpoints_clone,
+                    resource_endpoints_clone, // Correctly pass cloned Option<Arc<...>>
                     target_weights_clone,
+                    health_statuses_clone, // Correctly pass cloned Option<Arc<...>>
                 )
                 .await
             {
@@ -56,7 +65,7 @@ pub async fn accept_connections(
                     incoming,
                     &target_addr,
                     timeout_clone,
-                    connection_counts_clone,
+                    connection_counts_clone_for_proxy,
                     pool_clone,
                     cache_clone,
                     cache_enabled_endpoints_clone,
@@ -66,7 +75,7 @@ pub async fn accept_connections(
                     warn!("Error proxying connection to {}: {:?}", target_addr, e);
                 }
             } else {
-                warn!("No target addresses available.");
+                warn!("No target addresses available or all targets are down.");
             }
         });
     }

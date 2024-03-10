@@ -28,6 +28,7 @@ pub struct Route {
     pub cache_enabled_endpoints: Option<Vec<String>>,
     pub cache_ttl_seconds: Option<u64>,
     pub cache_capacity: Option<usize>,
+    pub health_check_endpoints: Option<HashMap<String, String>>,
 }
 
 //The resource endpoint might return data like the following JSON, which your load balancer would need to parse: {

@@ -57,98 +57,108 @@ impl BalanceStrategy {
         max_requests_per_target: Option<usize>,
         resource_endpoints: Option<Arc<Mutex<Vec<String>>>>,
         target_weights: Option<HashMap<String, usize>>,
+        health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
     ) -> Option<String> {
-        let mut addrs = target_addrs.lock().await;
-        let addrs_len = addrs.len();
-        let mut counts = connection_counts.lock().await;
-        let mut limits = request_limits.lock().await;
+        // Pre-filter addresses based on health status
+        let filtered_addrs = {
+            let lock = target_addrs.lock().await;
+            if let Some(health_statuses) = &health_statuses {
+                let health = health_statuses.lock().await;
+                lock.iter()
+                    .filter(|addr| *health.get(*addr).unwrap_or(&true)) // Default to true if not found
+                    .cloned()
+                    .collect::<VecDeque<_>>()
+            } else {
+                lock.clone()
+            }
+        };
 
+        let addrs_len = filtered_addrs.len();
         if addrs_len == 0 {
             return None;
         }
 
         match *self {
             BalanceStrategy::RoundRobin => {
-                if let Some(addr) = addrs.pop_front() {
-                    addrs.push_back(addr.clone());
-                    Some(addr)
-                } else {
-                    None
-                }
+                let addr = filtered_addrs.front().cloned();
+                addr
             }
             BalanceStrategy::Random => {
                 let mut rng = rand::thread_rng();
-                let index = rng.gen_range(0..addrs_len);
-                addrs.get(index).cloned()
+                filtered_addrs.get(rng.gen_range(0..addrs_len)).cloned()
             }
             BalanceStrategy::LeastConnections => {
-                let target = addrs
+                let counts = connection_counts.lock().await;
+                filtered_addrs
                     .iter()
                     .min_by_key(|addr| counts.get(*addr).unwrap_or(&usize::MAX))
-                    .cloned();
-                if let Some(ref addr) = target {
-                    *counts.entry(addr.clone()).or_insert(0) += 1;
-                }
-                target
+                    .cloned()
             }
             BalanceStrategy::RateLimiting => {
-                for addr in addrs.iter() {
-                    let count = limits.entry(addr.clone()).or_insert(0);
-                    if let Some(max_requests) = max_requests_per_target {
-                        if *count < max_requests {
-                            *count += 1; // İstek sayısını artır
-                            return Some(addr.clone());
+                let limits = request_limits.lock().await;
+                filtered_addrs
+                    .iter()
+                    .find(|addr| {
+                        let count = limits.get(*addr).unwrap_or(&0);
+                        if let Some(max_requests) = max_requests_per_target {
+                            *count < max_requests
+                        } else {
+                            true
                         }
-                    }
-                }
-                None
+                    })
+                    .cloned()
             }
             BalanceStrategy::ResourceBased => {
-                let resource_endpoints = match resource_endpoints {
-                    Some(endpoints) => endpoints,
-                    None => return None, // Early return if resource_endpoints is None
-                };
-
-                let endpoints = resource_endpoints.lock().await;
-                let mut scores = Vec::new();
-                for (index, endpoint) in endpoints.iter().enumerate() {
-                    if let Ok(usage) = fetch_resource_usage(endpoint).await {
-                        // Simple scoring based on CPU and memory usage
-                        let score = usage.cpu_usage_percent + usage.memory_usage_percent;
-                        scores.push((index, FloatOrd(score)));
+                if let Some(resource_endpoints) = &resource_endpoints {
+                    let endpoints = resource_endpoints.lock().await;
+                    let mut scores = Vec::new();
+                    for (index, endpoint) in endpoints.iter().enumerate() {
+                        if let Ok(usage) = fetch_resource_usage(endpoint).await {
+                            let score = usage.cpu_usage_percent + usage.memory_usage_percent;
+                            scores.push((index, FloatOrd(score)));
+                        }
                     }
-                }
 
-                if let Some((index, _)) = scores.iter().min_by_key(|(_, score)| score) {
-                    let addrs = target_addrs.lock().await;
-                    addrs.get(*index).cloned()
+                    scores
+                        .iter()
+                        .min_by_key(|(_, score)| score)
+                        .and_then(|(index, _)| filtered_addrs.get(*index).cloned())
                 } else {
                     None
                 }
             }
             BalanceStrategy::WeightedRoundRobin => {
-                let weights = target_weights.unwrap_or_else(|| {
-                    addrs
-                        .iter()
-                        .map(|addr| (addr.clone(), 1))
-                        .collect::<HashMap<String, usize>>()
-                });
-                let total_weight: usize = weights.values().sum();
+                // Initialize total_weight depending on whether target_weights is Some or None
+                let total_weight: usize = if let Some(ref weights) = target_weights {
+                    weights.values().sum()
+                } else {
+                    // Assuming each address has an implicit weight of 1 when no specific weights are provided
+                    filtered_addrs.len()
+                };
+
                 let mut rng = rand::thread_rng();
                 let mut weight_point = rng.gen_range(0..total_weight);
-                for (addr, weight) in weights.iter() {
-                    if weight_point < *weight {
+
+                // Use a separate iterator to handle weights based on the existence of target_weights
+                for addr in filtered_addrs.iter() {
+                    // Determine the weight for the current address
+                    let weight = match &target_weights {
+                        Some(weights) => *weights.get(addr).unwrap_or(&1),
+                        None => 1, // Default weight of 1 if no weights are defined
+                    };
+
+                    if weight_point < weight {
                         return Some(addr.clone());
                     }
-                    weight_point -= *weight;
+                    weight_point -= weight;
                 }
+
                 None
             }
-            BalanceStrategy::DynamicRateLimiting => {
-                let addrs = target_addrs.lock().await;
-                let counts = connection_counts.lock().await;
 
-                let eligible_addrs: Vec<_> = addrs
+            BalanceStrategy::DynamicRateLimiting => {
+                let counts = connection_counts.lock().await;
+                filtered_addrs
                     .iter()
                     .filter_map(|addr| {
                         let limit = calculate_dynamic_limit(addr, &counts);
@@ -160,15 +170,7 @@ impl BalanceStrategy {
                             None
                         }
                     })
-                    .collect();
-
-                if eligible_addrs.is_empty() {
-                    None
-                } else {
-                    let mut rng = rand::thread_rng();
-                    let index = rng.gen_range(0..eligible_addrs.len());
-                    eligible_addrs.get(index).cloned()
-                }
+                    .next()
             }
         }
     }
