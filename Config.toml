@@ -1,8 +1,24 @@
+# [[route]]
+# listen_addr = "127.0.0.1:8080"
+# target_addrs = ["127.0.0.1:80", "127.0.0.1:81"]
+# timeout_seconds = 30
+# balance_strategy = "round_robin"
+
 [[route]]
-listen_addr = "127.0.0.1:8080"
-target_addrs = ["127.0.0.1:80", "127.0.0.1:81"]
-timeout_seconds = 30
-balance_strategy = "round_robin"
+listen_addr = "0.0.0.0:443"
+target_addrs = ["192.168.1.1:80", "192.168.1.2:80"]
+balance_strategy = "WeightedRoundRobin"
+target_weights = { "192.168.1.1:80" = 3, "192.168.1.2:80" = 1 }
+resource_endpoints = [
+    "http://192.168.1.1:8080/stats",
+    "http://192.168.1.2:8080/stats",
+]
+timeout_seconds = 10
+max_requests_per_target = 150
+health_check_endpoints = { "192.168.1.1:80" = "http://192.168.1.1:8080/health", "192.168.1.2:80" = "http://192.168.1.2:8080/health" }
+cache_enabled_endpoints = ["/api/v1/data"]
+cache_ttl_seconds = 120
+cache_capacity = 2000
 
 # [[route]]
 # listen_addr = "127.0.0.1:8081"
