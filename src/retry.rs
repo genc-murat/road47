@@ -1,9 +1,9 @@
-use futures::future::select_ok;
+use futures::future::{select_ok, BoxFuture};
 use std::io::{self, Error, ErrorKind};
 use std::ops::Mul;
-use std::pin::Pin;
+use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::time::{sleep, timeout, Duration};
+use tokio::time::{sleep, timeout};
 
 pub async fn connect_with_retry(
     server_addresses: &[String],
@@ -16,34 +16,33 @@ pub async fn connect_with_retry(
     let mut delay = Duration::from_millis(initial_delay_millis);
 
     while attempts < max_attempts {
-        let mut connect_futures: Vec<Pin<Box<dyn futures::Future<Output = _> + Send>>> = vec![];
-
-        for address in server_addresses.iter() {
-            let address_clone = address.clone();
-            let future = Box::pin(async move {
-                match timeout(
-                    Duration::from_secs(timeout_secs),
-                    TcpStream::connect(&address_clone),
-                )
-                .await
-                {
-                    Ok(Ok(stream)) => {
-                        println!("Successfully connected to {}", address_clone);
-                        Ok(stream)
+        let connect_futures: Vec<BoxFuture<'static, io::Result<TcpStream>>> = server_addresses
+            .iter()
+            .map(|address| {
+                let address = address.clone();
+                Box::pin(async move {
+                    match timeout(
+                        Duration::from_secs(timeout_secs),
+                        TcpStream::connect(&address),
+                    )
+                    .await
+                    {
+                        Ok(Ok(stream)) => {
+                            println!("Successfully connected to {}", address);
+                            Ok(stream)
+                        }
+                        Ok(Err(e)) => {
+                            println!("Failed to connect to {}: {}", address, e);
+                            Err(e)
+                        }
+                        Err(_) => {
+                            println!("Connection attempt to {} timed out", address);
+                            Err(Error::new(ErrorKind::TimedOut, "Connection timed out"))
+                        }
                     }
-                    Ok(Err(e)) => {
-                        println!("Failed to connect to {}: {}", address_clone, e);
-                        Err(e)
-                    }
-                    Err(_) => {
-                        println!("Connection attempt to {} timed out", address_clone);
-                        Err(Error::new(ErrorKind::TimedOut, "Connection timed out"))
-                    }
-                }
-            });
-
-            connect_futures.push(future);
-        }
+                }) as BoxFuture<'static, io::Result<TcpStream>>
+            })
+            .collect();
 
         match select_ok(connect_futures).await {
             Ok((stream, _)) => return Ok(stream),
