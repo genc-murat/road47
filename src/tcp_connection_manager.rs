@@ -11,7 +11,7 @@ pub struct TcpConnectionManager {
 }
 
 fn load_config() -> Result<Config, io::Error> {
-    let config_str = fs::read_to_string("config.toml")?;
+    let config_str = fs::read_to_string("Config.toml")?;
     let config: Config = toml::from_str(&config_str)?;
     Ok(config)
 }
