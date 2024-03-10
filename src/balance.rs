@@ -59,7 +59,6 @@ impl BalanceStrategy {
         target_weights: Option<HashMap<String, usize>>,
         health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
     ) -> Option<String> {
-        // Pre-filter addresses based on health status
         let filtered_addrs = {
             let lock = target_addrs.lock().await;
             if let Some(health_statuses) = &health_statuses {
@@ -128,23 +127,19 @@ impl BalanceStrategy {
                 }
             }
             BalanceStrategy::WeightedRoundRobin => {
-                // Initialize total_weight depending on whether target_weights is Some or None
                 let total_weight: usize = if let Some(ref weights) = target_weights {
                     weights.values().sum()
                 } else {
-                    // Assuming each address has an implicit weight of 1 when no specific weights are provided
                     filtered_addrs.len()
                 };
 
                 let mut rng = rand::thread_rng();
                 let mut weight_point = rng.gen_range(0..total_weight);
 
-                // Use a separate iterator to handle weights based on the existence of target_weights
                 for addr in filtered_addrs.iter() {
-                    // Determine the weight for the current address
                     let weight = match &target_weights {
                         Some(weights) => *weights.get(addr).unwrap_or(&1),
-                        None => 1, // Default weight of 1 if no weights are defined
+                        None => 1,
                     };
 
                     if weight_point < weight {

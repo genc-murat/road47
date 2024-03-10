@@ -35,12 +35,10 @@ impl Manager for TcpConnectionManager {
     }
 
     async fn check(&self, mut conn: Self::Connection) -> Result<Self::Connection, Self::Error> {
-        // Attempt to write a zero-byte array to the connection.
-        // This operation is non-destructive for most protocols.
-        let buf = [0; 0]; // A zero-length buffer.
+        let buf = [0; 0];
         match conn.write(&buf).await {
-            Ok(_) => Ok(conn), // The connection is writable.
-            Err(e) => Err(e),  // The connection has likely gone bad.
+            Ok(_) => Ok(conn),
+            Err(e) => Err(e),
         }
     }
 }

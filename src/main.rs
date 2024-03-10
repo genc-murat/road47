@@ -52,7 +52,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let cache_enabled_endpoints = route.cache_enabled_endpoints.clone();
         let target_weights = route.target_weights.clone();
 
-        // Health check setup, if configured
         if let Some(health_check_endpoints) = &route.health_check_endpoints {
             let health_check_endpoints_arc = Arc::new(health_check_endpoints.clone());
             let health_checker_clone = Arc::clone(&health_checker);
@@ -78,7 +77,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
         }
 
-        // Accepting connections
         tokio::spawn(proxy::accept_connections(
             listener,
             pool,
@@ -92,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cache,
             cache_enabled_endpoints,
             target_weights,
-            Some(health_statuses.clone()), // Now correctly passing the cloned health_statuses
+            Some(health_statuses.clone()),
         ));
     }
 

@@ -27,7 +27,7 @@ pub async fn accept_connections(
     cache: Arc<Mutex<Cache>>,
     cache_enabled_endpoints: Option<Vec<String>>,
     target_weights: Option<HashMap<String, usize>>,
-    health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>, // This is already Option<Arc<...>>
+    health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
 ) -> io::Result<()> {
     while let Ok((incoming, _)) = listener.accept().await {
         let target_addrs_clone = Arc::clone(&target_addrs);
@@ -35,7 +35,6 @@ pub async fn accept_connections(
         let connection_counts_clone = Arc::clone(&connection_counts);
         let request_limits_clone = Arc::clone(&request_limits);
 
-        // Correctly clone Arc inside Option
         let resource_endpoints_clone = resource_endpoints.as_ref().map(Arc::clone);
 
         let pool_clone = Arc::clone(&pool);
@@ -43,7 +42,6 @@ pub async fn accept_connections(
         let cache_enabled_endpoints_clone = cache_enabled_endpoints.clone();
         let target_weights_clone = target_weights.clone();
 
-        // Correctly clone Arc inside Option
         let health_statuses_clone = health_statuses.as_ref().map(Arc::clone);
 
         tokio::spawn(async move {
@@ -55,9 +53,9 @@ pub async fn accept_connections(
                     connection_counts_clone,
                     request_limits_clone,
                     max_requests_per_target,
-                    resource_endpoints_clone, // Correctly pass cloned Option<Arc<...>>
+                    resource_endpoints_clone,
                     target_weights_clone,
-                    health_statuses_clone, // Correctly pass cloned Option<Arc<...>>
+                    health_statuses_clone,
                 )
                 .await
             {
@@ -89,24 +87,20 @@ async fn proxy_connection(
     timeout: Duration,
     connection_counts: Arc<Mutex<HashMap<String, usize>>>,
     pool: Arc<Pool<TcpConnectionManager>>,
-    cache: Arc<Mutex<Cache>>, // Cache is now correctly wrapped in an async Mutex
+    cache: Arc<Mutex<Cache>>,
     cache_enabled_endpoints: Option<Vec<String>>,
 ) -> io::Result<()> {
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
 
     if let Some(ref cache_enabled_endpoints) = cache_enabled_endpoints {
         if cache_enabled_endpoints.contains(&requested_endpoint) {
-            // Lock the cache asynchronously to ensure safe concurrent access
-            let cache_lock = cache.lock().await; // Artık doğru şekilde asenkron bir kilit kullanılıyor
+            let cache_lock = cache.lock().await;
             if let Some(cached_data) = cache_lock.get(&requested_endpoint).await {
-                // .await eklenmeli
-                // Cached data found, send response
                 return send_cached_response(incoming, &cached_data).await;
             }
         }
     }
 
-    // No cached data found or caching not enabled for this endpoint, proceed with normal flow
     let target = connect_to_target(&pool, timeout, target_addr).await?;
 
     let result = proxy_traffic_and_cache_response(
@@ -114,7 +108,7 @@ async fn proxy_connection(
         target,
         target_addr,
         &connection_counts,
-        cache.clone(), // Pass cache clone to the function
+        cache.clone(),
         requested_endpoint.clone(),
         &cache_enabled_endpoints,
     )
@@ -127,10 +121,8 @@ async fn extract_endpoint_from_stream(stream: &mut TcpStream) -> io::Result<Stri
     let mut reader = BufReader::new(stream);
     let mut first_line = String::new();
 
-    // Read the first line from the request
     let bytes_read = reader.read_line(&mut first_line).await?;
 
-    // If no bytes were read, return an error
     if bytes_read == 0 {
         return Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
@@ -138,8 +130,6 @@ async fn extract_endpoint_from_stream(stream: &mut TcpStream) -> io::Result<Stri
         ));
     }
 
-    // Example assumes the request is a well-formed HTTP GET request and extracts the path
-    // HTTP GET request format: GET /path HTTP/1.1
     let parts: Vec<&str> = first_line.split_whitespace().collect();
     if parts.len() < 3 {
         return Err(io::Error::new(
@@ -148,7 +138,6 @@ async fn extract_endpoint_from_stream(stream: &mut TcpStream) -> io::Result<Stri
         ));
     }
 
-    // Assuming the request follows the standard format, the path is the second part
     let path = parts[1].to_string();
 
     Ok(path)
@@ -207,7 +196,6 @@ async fn proxy_traffic_and_cache_response(
     requested_endpoint: String,
     cache_enabled_endpoints: &Option<Vec<String>>,
 ) -> io::Result<()> {
-    // Increment connection count
     {
         let mut counts = connection_counts.lock().await;
         *counts.entry(target_addr.to_string()).or_insert(0) += 1;
@@ -236,7 +224,6 @@ async fn proxy_traffic_and_cache_response(
             .map_or(false, |eps| eps.contains(&requested_endpoint))
         {
             let cache_lock = cache.lock().await;
-            // Await the cache_lock.put() function call
             cache_lock
                 .put(requested_endpoint, target_response_buffer)
                 .await;
@@ -253,7 +240,7 @@ async fn proxy_traffic_and_cache_response(
             proxy_result.err().unwrap()
         );
     }
-    // Decrement connection count
+
     {
         let mut counts = connection_counts.lock().await;
         if let Some(count) = counts.get_mut(target_addr) {
