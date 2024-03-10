@@ -8,28 +8,10 @@ use tokio::time::interval;
 #[derive(Clone)]
 pub struct ConfigManager {
     config: Arc<RwLock<Config>>,
-    last_modified: SystemTime,
+    last_modified: Arc<RwLock<SystemTime>>,
 }
 
 impl ConfigManager {
-    pub async fn new(config_path: &str) -> Self {
-        let metadata = fs::metadata(config_path)
-            .await
-            .expect("Failed to read file metadata");
-        let last_modified = metadata
-            .modified()
-            .expect("Failed to get modification time");
-        let config_contents = fs::read_to_string(config_path)
-            .await
-            .expect("Failed to read config file");
-        let config: Config = toml::from_str(&config_contents).expect("Failed to parse config");
-
-        ConfigManager {
-            config: Arc::new(RwLock::new(config)),
-            last_modified,
-        }
-    }
-
     pub async fn load(config_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let metadata = fs::metadata(config_path).await?;
         let last_modified = metadata.modified()?;
@@ -38,7 +20,7 @@ impl ConfigManager {
 
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
-            last_modified,
+            last_modified: Arc::new(RwLock::new(last_modified)),
         })
     }
 
@@ -46,25 +28,30 @@ impl ConfigManager {
         let mut interval = interval(Duration::from_secs(5));
         loop {
             interval.tick().await;
-            let metadata = match fs::metadata(&config_path).await {
-                Ok(metadata) => metadata,
-                Err(_) => continue,
-            };
-            let modified = match metadata.modified() {
-                Ok(time) => time,
-                Err(_) => continue,
-            };
-            if modified > self.last_modified {
-                println!("The configuration file has changed, reloading...");
-                let config_contents = fs::read_to_string(&config_path)
-                    .await
-                    .expect("Failed to read config file");
-                let config: Config =
-                    toml::from_str(&config_contents).expect("Failed to parse config");
-
-                let mut config_lock = self.config.write().await;
-                *config_lock = config;
-                println!("The configuration has been successfully reloaded.");
+            let metadata = fs::metadata(&config_path).await;
+            if let Ok(metadata) = metadata {
+                if let Ok(modified) = metadata.modified() {
+                    let last_modified_read = self.last_modified.read().await;
+                    if modified > *last_modified_read {
+                        drop(last_modified_read);
+                        match fs::read_to_string(&config_path).await {
+                            Ok(config_contents) => {
+                                match toml::from_str::<Config>(&config_contents) {
+                                    Ok(config) => {
+                                        let mut config_lock = self.config.write().await;
+                                        *config_lock = config;
+                                        let mut last_modified_write =
+                                            self.last_modified.write().await;
+                                        *last_modified_write = modified;
+                                        println!("Configuration has been successfully reloaded.");
+                                    }
+                                    Err(e) => eprintln!("Failed to parse config: {}", e),
+                                }
+                            }
+                            Err(e) => eprintln!("Failed to read config file: {}", e),
+                        }
+                    }
+                }
             }
         }
     }
