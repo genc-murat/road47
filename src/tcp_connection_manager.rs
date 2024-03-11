@@ -35,14 +35,8 @@ impl Manager for TcpConnectionManager {
             lock.get_config().await
         };
 
-        connect_with_retry(
-            &self.server_addresses,
-            config.retry_strategy.max_attempts,
-            config.retry_strategy.max_delay_secs,
-            config.retry_strategy.initial_delay_millis,
-            config.retry_strategy.timeout_secs,
-        )
-        .await
+        let retry_strategy_config = config.retry_strategy;
+        connect_with_retry(&self.server_addresses, retry_strategy_config).await
     }
 
     async fn check(&self, mut conn: Self::Connection) -> Result<Self::Connection, Self::Error> {

@@ -8,7 +8,14 @@ pub struct Config {
 }
 
 #[derive(Deserialize, Clone)]
+pub enum StrategyType {
+    FixedDelay,
+    ExponentialBackoff,
+}
+
+#[derive(Deserialize, Clone)]
 pub struct RetryStrategyConfig {
+    pub strategy_type: StrategyType,
     pub max_delay_secs: u64,
     pub max_attempts: usize,
     pub initial_delay_millis: u64,

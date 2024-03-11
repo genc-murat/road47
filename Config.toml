@@ -69,6 +69,7 @@ cache_capacity = 2000
 # cache_ttl_seconds = 60
 
 [retry_strategy]
+strategy_type = "FixedDelay"
 max_delay_secs = 2
 max_attempts = 5
 initial_delay_millis = 100
