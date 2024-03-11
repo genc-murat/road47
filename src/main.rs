@@ -14,26 +14,36 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::time::interval;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
-    let config_manager = ConfigManager::load("Config.toml").await?;
-    let config = config_manager.get_config().await;
+    let config_manager = Arc::new(RwLock::new(ConfigManager::load("Config.toml").await?));
+
+    let config = {
+        let read_guard = config_manager.read().await;
+        read_guard.get_config().await
+    };
 
     let health_checker = Arc::new(HealthChecker::new());
     let health_statuses = Arc::new(Mutex::new(HashMap::<String, bool>::new()));
 
-    let config_manager_clone = config_manager.clone();
+    let config_manager_clone: Arc<RwLock<ConfigManager>> = Arc::clone(&config_manager);
+
     tokio::spawn(async move {
-        config_manager_clone.run("Config.toml".to_string()).await;
+        let read_guard = config_manager_clone.read().await;
+        read_guard.run("Config.toml".to_string()).await;
     });
 
     for route in config.route {
         let timeout = Duration::from_secs(route.timeout_seconds);
-        let manager = TcpConnectionManager::initialize_with(route.target_addrs.clone());
+        let manager = TcpConnectionManager::initialize_with(
+            route.target_addrs.clone(),
+            Arc::clone(&config_manager),
+        );
         let pool = Arc::new(Pool::builder().build(manager));
 
         let listener = TcpListener::bind(&route.listen_addr).await?;
