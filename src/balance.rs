@@ -42,6 +42,7 @@ fn calculate_dynamic_limit(addr: &String, connection_counts: &HashMap<String, us
 impl BalanceStrategy {
     pub fn from_str(strategy: &str) -> Self {
         match strategy {
+            "roundrobin" => BalanceStrategy::RoundRobin,
             "random" => BalanceStrategy::Random,
             "leastconnections" => BalanceStrategy::LeastConnections,
             "ratelimiting" => BalanceStrategy::RateLimiting,
@@ -50,6 +51,22 @@ impl BalanceStrategy {
             "dynamicratelimiting" => BalanceStrategy::DynamicRateLimiting,
             "iphash" => BalanceStrategy::IPHash,
             _ => BalanceStrategy::RoundRobin,
+        }
+    }
+
+    async fn filter_addresses(
+        target_addrs: &Arc<Mutex<VecDeque<String>>>,
+        health_statuses: Option<&Arc<Mutex<HashMap<String, bool>>>>,
+    ) -> VecDeque<String> {
+        let lock = target_addrs.lock().await;
+        if let Some(health_statuses) = health_statuses {
+            let health = health_statuses.lock().await;
+            lock.iter()
+                .filter(|addr| *health.get(*addr).unwrap_or(&true))
+                .cloned()
+                .collect::<VecDeque<_>>()
+        } else {
+            lock.clone()
         }
     }
 
@@ -64,19 +81,8 @@ impl BalanceStrategy {
         health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
         client_ip: Option<String>,
     ) -> Option<String> {
-        let filtered_addrs = {
-            let lock = target_addrs.lock().await;
-            if let Some(health_statuses) = &health_statuses {
-                let health = health_statuses.lock().await;
-                lock.iter()
-                    .filter(|addr| *health.get(*addr).unwrap_or(&true)) // Default to true if not found
-                    .cloned()
-                    .collect::<VecDeque<_>>()
-            } else {
-                lock.clone()
-            }
-        };
-
+        let filtered_addrs =
+            BalanceStrategy::filter_addresses(&target_addrs, health_statuses.as_ref()).await;
         let addrs_len = filtered_addrs.len();
         if addrs_len == 0 {
             return None;
