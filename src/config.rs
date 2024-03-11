@@ -11,6 +11,13 @@ pub struct Config {
 pub enum StrategyType {
     FixedDelay,
     ExponentialBackoff,
+    LinearBackoff,
+    RandomDelay,
+    IncrementalBackoff,
+    FibonacciBackoff,
+    GeometricBackoff,
+    HarmonicBackoff,
+    JitterBackoff,
 }
 
 #[derive(Deserialize, Clone)]
@@ -20,6 +27,11 @@ pub struct RetryStrategyConfig {
     pub max_attempts: usize,
     pub initial_delay_millis: u64,
     pub timeout_secs: u64,
+    pub increment_millis: Option<u64>,
+    pub min_delay_millis: Option<u64>,
+    pub multiplier: Option<f64>,
+    pub increment_step_millis: Option<u64>,
+    pub step_increment_millis: Option<u64>,
 }
 
 #[derive(Deserialize, Clone)]

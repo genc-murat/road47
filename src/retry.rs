@@ -1,8 +1,6 @@
 use crate::config::RetryStrategyConfig;
 use crate::config::StrategyType;
-use crate::retry_strategy::ExponentialBackoffStrategy;
-use crate::retry_strategy::FixedDelayStrategy;
-use crate::retry_strategy::RetryStrategy;
+use crate::retry_strategy::*;
 use futures::future::{select_ok, BoxFuture};
 use std::io::{self, Error, ErrorKind};
 use std::time::Duration;
@@ -16,6 +14,43 @@ fn create_strategy(config: &RetryStrategyConfig) -> Box<dyn RetryStrategy> {
         }),
         StrategyType::ExponentialBackoff => Box::new(ExponentialBackoffStrategy {
             initial_delay: Duration::from_millis(config.initial_delay_millis),
+            max_delay: Duration::from_secs(config.max_delay_secs),
+        }),
+        StrategyType::LinearBackoff => Box::new(LinearBackoffStrategy {
+            initial_delay: Duration::from_millis(config.initial_delay_millis),
+            increment: Duration::from_millis(config.increment_millis.unwrap_or(100)),
+            max_delay: Duration::from_secs(config.max_delay_secs),
+        }),
+        StrategyType::RandomDelay => Box::new(RandomDelayStrategy {
+            min_delay: Duration::from_millis(
+                config
+                    .min_delay_millis
+                    .unwrap_or(config.initial_delay_millis),
+            ),
+            max_delay: Duration::from_secs(config.max_delay_secs),
+        }),
+        StrategyType::IncrementalBackoff => Box::new(IncrementalBackoffStrategy {
+            initial_delay: Duration::from_millis(config.initial_delay_millis),
+            increment_step: Duration::from_millis(config.increment_step_millis.unwrap_or(100)),
+            step_increment: Duration::from_millis(config.step_increment_millis.unwrap_or(50)),
+            max_delay: Duration::from_secs(config.max_delay_secs),
+        }),
+        StrategyType::FibonacciBackoff => Box::new(FibonacciBackoffStrategy {
+            base_delay: Duration::from_millis(config.initial_delay_millis),
+            max_delay: Duration::from_secs(config.max_delay_secs),
+        }),
+        StrategyType::GeometricBackoff => Box::new(GeometricBackoffStrategy {
+            initial_delay: Duration::from_millis(config.initial_delay_millis),
+            multiplier: config.multiplier.unwrap_or(2.0),
+            max_delay: Duration::from_secs(config.max_delay_secs),
+        }),
+        StrategyType::HarmonicBackoff => Box::new(HarmonicBackoffStrategy {
+            initial_delay: Duration::from_millis(config.initial_delay_millis),
+            max_delay: Duration::from_secs(config.max_delay_secs),
+        }),
+        StrategyType::JitterBackoff => Box::new(JitterBackoffStrategy {
+            initial_delay: Duration::from_millis(config.initial_delay_millis),
+            multiplier: config.multiplier.unwrap_or(2.0),
             max_delay: Duration::from_secs(config.max_delay_secs),
         }),
     }
