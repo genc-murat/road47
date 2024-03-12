@@ -3,6 +3,7 @@ use log::{info, warn};
 use mobc::Error as MobcError;
 use mobc::Pool;
 use road47::cache::Cache;
+use road47::rate_limiter::RateLimiter;
 use road47::tcp_connection_manager::TcpConnectionManager;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -28,9 +29,17 @@ pub async fn accept_connections(
     cache_enabled_endpoints: Option<Vec<String>>,
     target_weights: Option<HashMap<String, usize>>,
     health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
+    rate_limiter: Option<Arc<Box<dyn RateLimiter + Send + Sync>>>,
 ) -> io::Result<()> {
     while let Ok((incoming, addr)) = listener.accept().await {
-        let client_ip = Some(addr.ip().to_string());
+        let client_ip = addr.ip().to_string();
+        if let Some(limiter) = &rate_limiter {
+            if !limiter.allow(&client_ip) {
+                warn!("Rate limit exceeded for IP: {}", client_ip);
+                continue;
+            }
+        }
+
         let target_addrs_clone = Arc::clone(&target_addrs);
         let timeout_clone = timeout;
         let connection_counts_clone = Arc::clone(&connection_counts);
@@ -49,7 +58,7 @@ pub async fn accept_connections(
             let connection_counts_clone_for_proxy = Arc::clone(&connection_counts_clone);
 
             let client_ip_for_strategy = match balance_strategy {
-                BalanceStrategy::IPHash => client_ip.clone(),
+                BalanceStrategy::IPHash => Some(client_ip.clone()),
                 _ => None,
             };
 

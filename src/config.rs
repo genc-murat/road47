@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub struct Config {
     pub route: Vec<Route>,
     pub retry_strategy: RetryStrategyConfig,
+    pub rate_limiting: Option<RateLimitingConfig>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -18,6 +19,17 @@ pub enum StrategyType {
     GeometricBackoff,
     HarmonicBackoff,
     JitterBackoff,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct RateLimitingConfig {
+    pub strategy: String,
+    pub limit: u32,
+    pub window_size_seconds: u64,
+    pub refill_amount: Option<u32>,
+    pub refill_interval_seconds: Option<u64>,
+    pub capacity: Option<usize>,
+    pub leak_rate_seconds: Option<u64>,
 }
 
 #[derive(Deserialize, Clone)]

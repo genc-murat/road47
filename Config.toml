@@ -74,3 +74,8 @@ max_delay_secs = 2
 max_attempts = 5
 initial_delay_millis = 100
 timeout_secs = 5
+
+[rate_limiting]
+strategy = "SlidingWindow" # Veya "FixedWindow"
+limit = 100
+window_size_seconds = 60

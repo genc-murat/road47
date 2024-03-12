@@ -8,6 +8,7 @@ use mobc::Pool;
 use road47::cache::Cache;
 use road47::config_manager::ConfigManager;
 use road47::health_checker::HealthChecker;
+use road47::rate_limiter::create_rate_limiter;
 use road47::tcp_connection_manager::TcpConnectionManager;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -27,6 +28,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let read_guard = config_manager.read().await;
         read_guard.get_config().await
     };
+
+    let rate_limiter = Arc::new(create_rate_limiter(config.rate_limiting));
 
     let health_checker = Arc::new(HealthChecker::new());
     let health_statuses = Arc::new(Mutex::new(HashMap::<String, bool>::new()));
@@ -105,6 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cache_enabled_endpoints,
             target_weights,
             Some(health_statuses.clone()),
+            Some(rate_limiter.clone()),
         ));
     }
 
