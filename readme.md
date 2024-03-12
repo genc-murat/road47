@@ -20,17 +20,10 @@ Road47 is an innovative, feature-rich load balancer and proxy solution designed 
 - **TCP Connection Management**: Utilizes a custom TCP connection manager to efficiently manage connections to backend servers, including support for connection pooling and retry strategies for failed connection attempts.
 - **Async/Await Support**: Fully asynchronous architecture powered by Tokio, enabling non-blocking I/O operations that scale efficiently across cores.
 - **Logging and Monitoring**: Comprehensive logging for debugging and monitoring, facilitating the diagnosis of issues and performance optimization.
-
-## Architecture
-
-Road47 is architectured around a set of core components that work together to ensure efficient load distribution and high availability:
-
-- **Balance Strategies**: Modular strategy implementations that can be dynamically selected based on configuration.
-- **Config Manager**: Watches configuration files for changes and reloads the configuration without restarting the service.
-- **Health Checker**: Periodically checks the health of backend services and updates their availability status.
-- **Cache**: An LRU cache for storing responses from backend services to improve response times for frequently accessed data.
-- **TCP Connection Manager**: Manages pool of connections to backend services, implementing retry logic and connection health checks.
-- **Proxy**: Accepts incoming connections, selects a target based on the configured load balancing strategy, and forwards the request while handling retries, caching, and connection management.
+- **Rate Limiting**: Implements various rate limiting strategies such as Fixed Window, Sliding Window, Token Bucket, and Leaky Bucket, allowing fine-grained control over the rate at which requests are processed and ensuring the stability of backend services under heavy load conditions.
+- **Endpoint Extraction for Caching**: Automatically extracts requested endpoints from incoming requests, enabling more efficient caching strategies by storing and serving cached data based on specific endpoints.
+- **Automatic Connection and Request Count Management**: Dynamically manages connection and request counts per target server, automatically adjusting to ensure balanced distribution of traffic and preventing any single server from becoming overloaded.
+- **Enhanced Caching Mechanisms**: Beyond basic LRU caching, the system now supports conditional caching based on request endpoints, allowing specific responses to be cached and served directly, reducing load on backend services and improving response times for end-users.
 
 ## Getting Started
 
