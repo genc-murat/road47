@@ -6,7 +6,7 @@
 
 # Road47: A High-Performance, Rust-Based Load Balancer and Proxy
 
-Road47 is an innovative, feature-rich load balancer and proxy solution designed to optimize the distribution of traffic across multiple servers, ensuring high availability and reliability of services. Written in Rust, Road47 leverages the language's safety, performance, and concurrency features, making it an ideal choice for handling high-throughput and low-latency network applications. This document provides a comprehensive overview of Road47's capabilities, architecture, and how to get started with it.
+Road47 is an innovative, feature-rich load balancer and proxy solution designed to optimize the distribution of traffic across multiple servers, ensuring high availability and reliability of services. Written in Rust, Road47 leverages the language's safety, performance, and concurrency features, making it an ideal choice for handling high-throughput and low-latency network applications.
 
 ## Features
 
