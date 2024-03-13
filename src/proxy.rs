@@ -31,11 +31,19 @@ pub async fn accept_connections(
     health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
     rate_limiter: Option<Arc<Box<dyn RateLimiter + Send + Sync>>>,
 ) -> io::Result<()> {
-    while let Ok((incoming, addr)) = listener.accept().await {
+    while let Ok((mut incoming, addr)) = listener.accept().await {
         let client_ip = addr.ip().to_string();
         if let Some(limiter) = &rate_limiter {
             if !limiter.allow(&client_ip) {
                 warn!("Rate limit exceeded for IP: {}", client_ip);
+                let response = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 33\r\n\r\nError: Rate limit exceeded.\n";
+                // Since `incoming` is now mutable, this should work
+                if let Err(e) = incoming.write_all(response.as_bytes()).await {
+                    warn!(
+                        "Failed to send rate limit exceeded response to {}: {}",
+                        client_ip, e
+                    );
+                }
                 continue;
             }
         }
