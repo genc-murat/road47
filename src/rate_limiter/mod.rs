@@ -1,12 +1,14 @@
 mod fixed_window;
 mod leaky_bucket;
 mod sliding_window;
+mod sliding_window_counter;
 mod token_bucket;
 
 use crate::config::RateLimitingConfig;
 use crate::rate_limiter::fixed_window::FixedWindowRateLimiter;
 use crate::rate_limiter::leaky_bucket::LeakyBucketRateLimiter;
 use crate::rate_limiter::sliding_window::SlidingWindowRateLimiter;
+use crate::rate_limiter::sliding_window_counter::SlidingWindowCounterRateLimiter;
 use crate::rate_limiter::token_bucket::TokenBucketRateLimiter;
 use log::error;
 use std::time::Duration;
@@ -56,6 +58,16 @@ pub fn create_rate_limiter(
                 Box::new(LeakyBucketRateLimiter::new(
                     capacity,
                     Duration::from_secs(leak_rate_seconds),
+                ))
+            }
+            "SlidingWindowCounter" => {
+                let granularity_seconds = rate_limiting_config.granularity_seconds.unwrap_or_else(|| {
+                    panic!("SlidingWindowCounter strategy requires a granularity_seconds in the configuration")
+                });
+                Box::new(SlidingWindowCounterRateLimiter::new(
+                    rate_limiting_config.limit,
+                    Duration::from_secs(rate_limiting_config.window_size_seconds),
+                    Duration::from_secs(granularity_seconds),
                 ))
             }
             _ => {

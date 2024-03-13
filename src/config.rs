@@ -30,6 +30,7 @@ pub struct RateLimitingConfig {
     pub refill_interval_seconds: Option<u64>,
     pub capacity: Option<usize>,
     pub leak_rate_seconds: Option<u64>,
+    pub granularity_seconds: Option<u64>,
 }
 
 #[derive(Deserialize, Clone)]
