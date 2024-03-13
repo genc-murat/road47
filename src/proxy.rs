@@ -37,7 +37,7 @@ pub async fn accept_connections(
             if !limiter.allow(&client_ip) {
                 warn!("Rate limit exceeded for IP: {}", client_ip);
                 let response = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 33\r\n\r\nError: Rate limit exceeded.\n";
-                // Since `incoming` is now mutable, this should work
+
                 if let Err(e) = incoming.write_all(response.as_bytes()).await {
                     warn!(
                         "Failed to send rate limit exceeded response to {}: {}",
