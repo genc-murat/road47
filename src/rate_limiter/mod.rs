@@ -1,14 +1,14 @@
 mod fixed_window;
 mod leaky_bucket;
-mod sliding_window;
 mod sliding_window_counter;
+mod sliding_window_log;
 mod token_bucket;
 
 use crate::config::RateLimitingConfig;
 use crate::rate_limiter::fixed_window::FixedWindowRateLimiter;
 use crate::rate_limiter::leaky_bucket::LeakyBucketRateLimiter;
-use crate::rate_limiter::sliding_window::SlidingWindowRateLimiter;
 use crate::rate_limiter::sliding_window_counter::SlidingWindowCounterRateLimiter;
+use crate::rate_limiter::sliding_window_log::SlidingWindowLogRateLimiter;
 use crate::rate_limiter::token_bucket::TokenBucketRateLimiter;
 use log::error;
 use std::time::Duration;
@@ -34,7 +34,7 @@ pub fn create_rate_limiter(
                 rate_limiting_config.limit,
                 Duration::from_secs(rate_limiting_config.window_size_seconds),
             )),
-            "SlidingWindow" => Box::new(SlidingWindowRateLimiter::new(
+            "SlidingWindow" => Box::new(SlidingWindowLogRateLimiter::new(
                 rate_limiting_config.limit,
                 Duration::from_secs(rate_limiting_config.window_size_seconds),
             )),

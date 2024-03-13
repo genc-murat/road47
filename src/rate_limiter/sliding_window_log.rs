@@ -4,15 +4,15 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-pub struct SlidingWindowRateLimiter {
+pub struct SlidingWindowLogRateLimiter {
     requests: Mutex<HashMap<String, VecDeque<Instant>>>,
     limit: u32,
     window: Duration,
 }
 
-impl SlidingWindowRateLimiter {
+impl SlidingWindowLogRateLimiter {
     pub fn new(limit: u32, window: Duration) -> Self {
-        SlidingWindowRateLimiter {
+        SlidingWindowLogRateLimiter {
             requests: Mutex::new(HashMap::new()),
             limit,
             window,
@@ -33,7 +33,7 @@ impl SlidingWindowRateLimiter {
     }
 }
 
-impl RateLimiter for SlidingWindowRateLimiter {
+impl RateLimiter for SlidingWindowLogRateLimiter {
     fn allow(&self, key: &str) -> bool {
         let mut requests = self.requests.lock().unwrap();
 
