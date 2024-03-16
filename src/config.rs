@@ -9,6 +9,15 @@ pub struct Config {
 }
 
 #[derive(Deserialize, Clone)]
+pub struct RequestModificationRule {
+    pub path_contains: Option<String>,
+    pub method: Option<String>,
+    pub add_headers: HashMap<String, String>,
+    pub remove_headers: Vec<String>,
+    pub rewrite_url: Option<String>,
+}
+
+#[derive(Deserialize, Clone)]
 pub enum StrategyType {
     FixedDelay,
     ExponentialBackoff,
@@ -61,6 +70,7 @@ pub struct Route {
     pub cache_ttl_seconds: Option<u64>,
     pub cache_capacity: Option<usize>,
     pub health_check_endpoints: Option<HashMap<String, String>>,
+    pub request_modification_rules: Option<Vec<RequestModificationRule>>,
 }
 
 //The resource endpoint might return data like the following JSON, which your load balancer would need to parse: {

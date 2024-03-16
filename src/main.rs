@@ -6,6 +6,7 @@ use env_logger;
 use log::{error, info};
 use mobc::Pool;
 use road47::cache::Cache;
+use road47::config::RequestModificationRule;
 use road47::config_manager::ConfigManager;
 use road47::health_checker::HealthChecker;
 use road47::rate_limiter::create_rate_limiter;
@@ -69,6 +70,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let cache_enabled_endpoints = route.cache_enabled_endpoints.clone();
         let target_weights = route.target_weights.clone();
 
+        let request_modification_rules: Vec<RequestModificationRule> = route
+            .request_modification_rules
+            .clone()
+            .unwrap_or_else(Vec::new);
+
         if let Some(health_check_endpoints) = &route.health_check_endpoints {
             let health_check_endpoints_arc = Arc::new(health_check_endpoints.clone());
             let health_checker_clone = Arc::clone(&health_checker);
@@ -109,6 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             target_weights,
             Some(health_statuses.clone()),
             Some(rate_limiter.clone()),
+            Some(request_modification_rules),
         ));
     }
 

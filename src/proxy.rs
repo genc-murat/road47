@@ -3,6 +3,7 @@ use log::{info, warn};
 use mobc::Error as MobcError;
 use mobc::Pool;
 use road47::cache::Cache;
+use road47::config::RequestModificationRule;
 use road47::rate_limiter::RateLimiter;
 use road47::tcp_connection_manager::TcpConnectionManager;
 use std::collections::{HashMap, VecDeque};
@@ -30,6 +31,7 @@ pub async fn accept_connections(
     target_weights: Option<HashMap<String, usize>>,
     health_statuses: Option<Arc<Mutex<HashMap<String, bool>>>>,
     rate_limiter: Option<Arc<Box<dyn RateLimiter + Send + Sync>>>,
+    rules: Option<Vec<RequestModificationRule>>,
 ) -> io::Result<()> {
     while let Ok((mut incoming, addr)) = listener.accept().await {
         let client_ip = addr.ip().to_string();
@@ -61,7 +63,7 @@ pub async fn accept_connections(
         let target_weights_clone = target_weights.clone();
 
         let health_statuses_clone = health_statuses.as_ref().map(Arc::clone);
-
+        let rules_for_connection = rules.clone();
         tokio::spawn(async move {
             let connection_counts_clone_for_proxy = Arc::clone(&connection_counts_clone);
 
@@ -91,6 +93,7 @@ pub async fn accept_connections(
                     pool_clone,
                     cache_clone,
                     cache_enabled_endpoints_clone,
+                    rules_for_connection,
                 )
                 .await
                 {
@@ -105,6 +108,67 @@ pub async fn accept_connections(
     Ok(())
 }
 
+async fn handle_request_modification(
+    incoming: &mut TcpStream,
+    rules: &[RequestModificationRule],
+) -> io::Result<()> {
+    let mut buffer = Vec::new();
+    incoming.read_to_end(&mut buffer).await?;
+
+    let request_str = String::from_utf8_lossy(&buffer);
+    let headers_end = request_str
+        .find("\r\n\r\n")
+        .unwrap_or_else(|| request_str.len());
+    let (header_str, body) = request_str.split_at(headers_end);
+    let mut lines = header_str.lines();
+    let request_line = lines.next().unwrap_or_default();
+    let request_parts: Vec<&str> = request_line.split_whitespace().collect();
+    if request_parts.len() < 3 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Malformed request line",
+        ));
+    }
+
+    let (method, mut path) = (request_parts[0], request_parts[1].to_string());
+    let mut headers = HashMap::new();
+
+    for line in lines {
+        if let Some((key, value)) = line.split_once(": ") {
+            headers.insert(key.to_string(), value.to_string());
+        }
+    }
+
+    for rule in rules {
+        if let Some(ref contains) = rule.path_contains {
+            if path.contains(contains) {
+                if let Some(ref new_path) = rule.rewrite_url {
+                    path = new_path.clone();
+                    break;
+                }
+            }
+        }
+
+        for header in &rule.remove_headers {
+            headers.remove(header);
+        }
+
+        headers.extend(rule.add_headers.clone());
+    }
+
+    let mut modified_request = format!("{} {} HTTP/1.1\r\n", method, path);
+    for (key, value) in &headers {
+        modified_request.push_str(&format!("{}: {}\r\n", key, value));
+    }
+    modified_request.push_str("\r\n");
+    modified_request.push_str(body);
+
+    incoming.write_all(modified_request.as_bytes()).await?;
+    incoming.flush().await?;
+
+    Ok(())
+}
+
 async fn proxy_connection(
     mut incoming: TcpStream,
     target_addr: &str,
@@ -113,7 +177,12 @@ async fn proxy_connection(
     pool: Arc<Pool<TcpConnectionManager>>,
     cache: Arc<Mutex<Cache>>,
     cache_enabled_endpoints: Option<Vec<String>>,
+    rules: Option<Vec<RequestModificationRule>>,
 ) -> io::Result<()> {
+    if let Some(ref rules) = rules {
+        handle_request_modification(&mut incoming, rules).await?;
+    }
+
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
 
     if let Some(ref cache_enabled_endpoints) = cache_enabled_endpoints {
