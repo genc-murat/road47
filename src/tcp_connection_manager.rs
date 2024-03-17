@@ -1,6 +1,7 @@
 use crate::config_manager::ConfigManager;
 use crate::retry::connect_with_retry;
-use mobc::{async_trait, Manager};
+use async_trait::async_trait;
+use mobc::Manager;
 use std::io;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
@@ -30,18 +31,16 @@ impl Manager for TcpConnectionManager {
     type Error = io::Error;
 
     async fn connect(&self) -> Result<Self::Connection, Self::Error> {
-        let config = {
-            let lock = self.config_manager.read().await;
-            lock.get_config().await
+        let retry_strategy_config = {
+            let config_manager = self.config_manager.read().await;
+            config_manager.get_config().await.retry_strategy
         };
 
-        let retry_strategy_config = config.retry_strategy;
         connect_with_retry(&self.server_addresses, retry_strategy_config).await
     }
 
     async fn check(&self, mut conn: Self::Connection) -> Result<Self::Connection, Self::Error> {
-        let buf = [0; 0];
-        match conn.write(&buf).await {
+        match conn.write_all(&[]).await {
             Ok(_) => Ok(conn),
             Err(e) => Err(e),
         }
