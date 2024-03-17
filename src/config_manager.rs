@@ -26,38 +26,41 @@ impl ConfigManager {
 
     pub async fn run(&self, config_path: String) {
         let mut interval = interval(Duration::from_secs(5));
+
         loop {
             interval.tick().await;
-            let metadata = fs::metadata(&config_path).await;
-            if let Ok(metadata) = metadata {
-                if let Ok(modified) = metadata.modified() {
-                    let last_modified_read = self.last_modified.read().await;
-                    if modified > *last_modified_read {
-                        drop(last_modified_read);
-                        match fs::read_to_string(&config_path).await {
-                            Ok(config_contents) => {
-                                match toml::from_str::<Config>(&config_contents) {
-                                    Ok(config) => {
-                                        let mut config_lock = self.config.write().await;
-                                        *config_lock = config;
-                                        let mut last_modified_write =
-                                            self.last_modified.write().await;
-                                        *last_modified_write = modified;
-                                        println!("Configuration has been successfully reloaded.");
-                                    }
-                                    Err(e) => eprintln!("Failed to parse config: {}", e),
-                                }
-                            }
-                            Err(e) => eprintln!("Failed to read config file: {}", e),
-                        }
-                    }
+            let should_reload = {
+                let last_modified_lock = self.last_modified.read().await;
+                let metadata = fs::metadata(&config_path).await.ok();
+                metadata.map_or(false, |m| m.modified().ok() > Some(*last_modified_lock))
+            };
+
+            if should_reload {
+                if let Err(e) = self.reload_config(&config_path).await {
+                    eprintln!("Failed to reload config: {}", e);
                 }
             }
         }
     }
 
+    async fn reload_config(&self, config_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let config_contents = fs::read_to_string(config_path).await?;
+        let config: Config = toml::from_str(&config_contents)?;
+        let metadata = fs::metadata(config_path).await?;
+        let modified = metadata.modified()?;
+
+        let mut config_lock = self.config.write().await;
+        *config_lock = config;
+
+        let mut last_modified_lock = self.last_modified.write().await;
+        *last_modified_lock = modified;
+
+        println!("Configuration has been successfully reloaded.");
+
+        Ok(())
+    }
+
     pub async fn get_config(&self) -> Config {
-        let config_lock = self.config.read().await;
-        (*config_lock).clone()
+        self.config.read().await.clone()
     }
 }
