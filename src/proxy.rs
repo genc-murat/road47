@@ -180,7 +180,9 @@ async fn proxy_connection(
     rules: Option<Vec<RequestModificationRule>>,
 ) -> io::Result<()> {
     if let Some(ref rules) = rules {
-        handle_request_modification(&mut incoming, rules).await?;
+        if !rules.is_empty() {
+            handle_request_modification(&mut incoming, rules).await?;
+        }
     }
 
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
