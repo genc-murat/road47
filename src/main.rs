@@ -3,7 +3,6 @@ mod config;
 mod proxy;
 use crate::balance::BalanceStrategy;
 use env_logger;
-use log::{error, info};
 use mobc::Pool;
 use road47::cache::Cache;
 use road47::config::RequestModificationRule;
@@ -18,6 +17,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::time::interval;
+use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

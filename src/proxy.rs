@@ -1,5 +1,4 @@
 use crate::balance::BalanceStrategy;
-use log::{info, warn};
 use mobc::Error as MobcError;
 use mobc::Pool;
 use road47::cache::Cache;
@@ -15,6 +14,7 @@ use tokio::net::tcp::{ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
+use tracing::{info, warn};
 
 pub async fn accept_connections(
     listener: TcpListener,
