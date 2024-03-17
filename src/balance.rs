@@ -14,10 +14,16 @@ struct ResourceUsage {
     memory_usage_percent: f32,
 }
 
-async fn fetch_resource_usage(endpoint: &str) -> Result<ResourceUsage, Error> {
-    let client = reqwest::Client::new();
-    let resp = client.get(endpoint).send().await?;
-    resp.json::<ResourceUsage>().await
+async fn fetch_resource_usage(
+    client: &reqwest::Client,
+    endpoint: &str,
+) -> Result<ResourceUsage, Error> {
+    client
+        .get(endpoint)
+        .send()
+        .await?
+        .json::<ResourceUsage>()
+        .await
 }
 
 #[derive(Clone, Copy)]
@@ -122,8 +128,9 @@ impl BalanceStrategy {
                 if let Some(resource_endpoints) = &resource_endpoints {
                     let endpoints = resource_endpoints.lock().await;
                     let mut scores = Vec::new();
+                    let client = reqwest::Client::builder().build().unwrap();
                     for (index, endpoint) in endpoints.iter().enumerate() {
-                        if let Ok(usage) = fetch_resource_usage(endpoint).await {
+                        if let Ok(usage) = fetch_resource_usage(&client, endpoint).await {
                             let score = usage.cpu_usage_percent + usage.memory_usage_percent;
                             scores.push((index, FloatOrd(score)));
                         }
