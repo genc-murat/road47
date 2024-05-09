@@ -270,10 +270,7 @@ async fn proxy_traffic_and_cache_response(
     }
     let (mut ri, mut wi) = incoming.split();
     let (mut ro, mut wo) = target.split();
-    match tokio::try_join!(
-        tokio::io::copy(&mut ri, &mut wo),
-        tokio::io::copy(&mut ro, &mut wi)
-    ) {
+    match tokio::try_join!(tokio::io::copy(&mut ri, &mut wo), tokio::io::copy(&mut ro, &mut wi)) {
         Ok(_) => info!("Proxy completed successfully for {}", target_addr),
         Err(e) => warn!("Proxy operation failed for {}: {:?}", target_addr, e),
     }
