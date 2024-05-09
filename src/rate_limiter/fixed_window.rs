@@ -1,7 +1,6 @@
-use super::RateLimiter;
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex; 
 
 pub struct FixedWindowRateLimiter {
     requests: Mutex<HashMap<String, (u64, u32)>>,
@@ -17,11 +16,9 @@ impl FixedWindowRateLimiter {
             window_size,
         }
     }
-}
 
-impl RateLimiter for FixedWindowRateLimiter {
-    fn allow(&self, key: &str) -> bool {
-        let mut requests = self.requests.lock().unwrap();
+    pub async fn allow(&self, key: &str) -> bool {
+        let mut requests = self.requests.lock().await;
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
