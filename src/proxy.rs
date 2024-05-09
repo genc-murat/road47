@@ -39,7 +39,6 @@ pub async fn accept_connections(
             if !limiter.allow(&client_ip) {
                 warn!("Rate limit exceeded for IP: {}", client_ip);
                 let response = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 33\r\n\r\nError: Rate limit exceeded.\n";
-
                 if let Err(e) = incoming.write_all(response.as_bytes()).await {
                     warn!(
                         "Failed to send rate limit exceeded response to {}: {}",
@@ -49,29 +48,23 @@ pub async fn accept_connections(
                 continue;
             }
         }
-
         let target_addrs_clone = Arc::clone(&target_addrs);
         let timeout_clone = timeout;
         let connection_counts_clone = Arc::clone(&connection_counts);
         let request_limits_clone = Arc::clone(&request_limits);
-
         let resource_endpoints_clone = resource_endpoints.as_ref().map(Arc::clone);
-
         let pool_clone = Arc::clone(&pool);
         let cache_clone = Arc::clone(&cache);
         let cache_enabled_endpoints_clone = cache_enabled_endpoints.clone();
         let target_weights_clone = target_weights.clone();
-
         let health_statuses_clone = health_statuses.as_ref().map(Arc::clone);
         let rules_for_connection = rules.clone();
         tokio::spawn(async move {
             let connection_counts_clone_for_proxy = Arc::clone(&connection_counts_clone);
-
             let client_ip_for_strategy = match balance_strategy {
                 BalanceStrategy::IPHash => Some(client_ip.clone()),
                 _ => None,
             };
-
             if let Some(target_addr) = balance_strategy
                 .select_target(
                     target_addrs_clone,
@@ -104,7 +97,6 @@ pub async fn accept_connections(
             }
         });
     }
-
     Ok(())
 }
 
@@ -114,7 +106,6 @@ async fn handle_request_modification(
 ) -> io::Result<()> {
     let mut buffer = Vec::new();
     incoming.read_to_end(&mut buffer).await?;
-
     let request_str = String::from_utf8_lossy(&buffer);
     let headers_end = request_str
         .find("\r\n\r\n")
@@ -129,16 +120,13 @@ async fn handle_request_modification(
             "Malformed request line",
         ));
     }
-
     let (method, mut path) = (request_parts[0], request_parts[1].to_string());
     let mut headers = HashMap::new();
-
     for line in lines {
         if let Some((key, value)) = line.split_once(": ") {
             headers.insert(key.to_string(), value.to_string());
         }
     }
-
     for rule in rules {
         if let Some(ref contains) = rule.path_contains {
             if path.contains(contains) {
@@ -148,24 +136,19 @@ async fn handle_request_modification(
                 }
             }
         }
-
         for header in &rule.remove_headers {
             headers.remove(header);
         }
-
         headers.extend(rule.add_headers.clone());
     }
-
     let mut modified_request = format!("{} {} HTTP/1.1\r\n", method, path);
     for (key, value) in &headers {
         modified_request.push_str(&format!("{}: {}\r\n", key, value));
     }
     modified_request.push_str("\r\n");
     modified_request.push_str(body);
-
     incoming.write_all(modified_request.as_bytes()).await?;
     incoming.flush().await?;
-
     Ok(())
 }
 
@@ -184,9 +167,7 @@ async fn proxy_connection(
             handle_request_modification(&mut incoming, rules).await?;
         }
     }
-
     let requested_endpoint = extract_endpoint_from_stream(&mut incoming).await?;
-
     if let Some(ref cache_enabled_endpoints) = cache_enabled_endpoints {
         if cache_enabled_endpoints.contains(&requested_endpoint) {
             let cache_lock = cache.lock().await;
@@ -195,9 +176,7 @@ async fn proxy_connection(
             }
         }
     }
-
     let target = connect_to_target(&pool, timeout, target_addr).await?;
-
     let result = proxy_traffic_and_cache_response(
         incoming,
         target,
@@ -208,23 +187,19 @@ async fn proxy_connection(
         &cache_enabled_endpoints,
     )
     .await;
-
     result
 }
 
 async fn extract_endpoint_from_stream(stream: &mut TcpStream) -> io::Result<String> {
     let mut reader = BufReader::new(stream);
     let mut first_line = String::new();
-
     let bytes_read = reader.read_line(&mut first_line).await?;
-
     if bytes_read == 0 {
         return Err(io::Error::new(
             io::ErrorKind::UnexpectedEof,
             "EOF reached before completing read",
         ));
     }
-
     let parts: Vec<&str> = first_line.split_whitespace().collect();
     if parts.len() < 3 {
         return Err(io::Error::new(
@@ -232,9 +207,7 @@ async fn extract_endpoint_from_stream(stream: &mut TcpStream) -> io::Result<Stri
             "Invalid HTTP request line",
         ));
     }
-
     let path = parts[1].to_string();
-
     Ok(path)
 }
 
@@ -295,7 +268,6 @@ async fn proxy_traffic_and_cache_response(
         let mut counts = connection_counts.lock().await;
         *counts.entry(target_addr.to_string()).or_insert(0) += 1;
     }
-
     let (mut ri, mut wi) = incoming.split();
     let (mut ro, mut wo) = target.split();
     match tokio::try_join!(
@@ -305,14 +277,11 @@ async fn proxy_traffic_and_cache_response(
         Ok(_) => info!("Proxy completed successfully for {}", target_addr),
         Err(e) => warn!("Proxy operation failed for {}: {:?}", target_addr, e),
     }
-
     let mut target_response_buffer = Vec::new();
-
     let proxy_result = tokio::try_join!(
         tokio::io::copy(&mut ri, &mut wo),
         read_and_write(&mut ro, &mut wi, &mut target_response_buffer),
     );
-
     if let Ok(_) = proxy_result {
         if cache_enabled_endpoints
             .as_ref()
@@ -323,7 +292,6 @@ async fn proxy_traffic_and_cache_response(
                 .put(requested_endpoint, target_response_buffer)
                 .await;
         }
-
         info!(
             "Proxy and cache operation completed successfully for {}",
             target_addr
@@ -335,7 +303,6 @@ async fn proxy_traffic_and_cache_response(
             proxy_result.err().unwrap()
         );
     }
-
     {
         let mut counts = connection_counts.lock().await;
         if let Some(count) = counts.get_mut(target_addr) {
@@ -352,17 +319,14 @@ async fn read_and_write(
 ) -> io::Result<u64> {
     let mut buf = [0; 4096];
     let mut total_written = 0;
-
     loop {
         let n = reader.read(&mut buf).await?;
         if n == 0 {
             break;
         }
-
         buffer.extend_from_slice(&buf[0..n]);
         writer.write_all(&buf[0..n]).await?;
         total_written += n as u64;
     }
-
     Ok(total_written)
 }
