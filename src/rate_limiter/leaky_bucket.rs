@@ -1,8 +1,8 @@
 use crate::rate_limiter::RateLimiter;
-use std::collections::{HashMap, VecDeque};
-use tokio::sync::Mutex; 
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use log::{warn, info}; 
 
 pub struct LeakyBucketRateLimiter {
     requests: Mutex<HashMap<String, VecDeque<Instant>>>,
@@ -18,9 +18,11 @@ impl LeakyBucketRateLimiter {
             leak_rate,
         }
     }
+}
 
-    pub async fn allow(&self, key: &str) -> bool {
-        let mut requests = self.requests.lock().await;
+impl RateLimiter for LeakyBucketRateLimiter {
+    fn allow(&self, key: &str) -> bool {
+        let mut requests = self.requests.lock().unwrap();
         let now = Instant::now();
         let queue = requests.entry(key.to_owned()).or_insert_with(VecDeque::new);
 
@@ -33,10 +35,8 @@ impl LeakyBucketRateLimiter {
 
         if queue.len() < self.capacity {
             queue.push_back(now);
-            info!("Request allowed for key: {}", key);
             true
         } else {
-            warn!("Request denied for key: {}", key);
             false
         }
     }
