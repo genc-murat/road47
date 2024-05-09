@@ -63,7 +63,6 @@ pub async fn connect_with_retry(
     let strategy = create_strategy(&config);
     let max_attempts = config.max_attempts;
     let timeout_secs = config.timeout_secs;
-
     let mut attempts = 0;
 
     while strategy.should_retry(attempts, max_attempts) {
@@ -102,7 +101,6 @@ pub async fn connect_with_retry(
 
         let delay = strategy.delay(attempts);
         sleep(delay).await;
-
         attempts += 1;
     }
 
