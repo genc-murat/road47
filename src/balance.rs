@@ -37,7 +37,6 @@ pub enum BalanceStrategy {
     DynamicRateLimiting,
     IPHash,
 }
-
 fn calculate_dynamic_limit(addr: &String, connection_counts: &HashMap<String, usize>) -> usize {
     let current_connections = connection_counts.get(addr).unwrap_or(&0);
     if *current_connections > 100 {
@@ -46,7 +45,6 @@ fn calculate_dynamic_limit(addr: &String, connection_counts: &HashMap<String, us
         100
     }
 }
-
 impl BalanceStrategy {
     pub fn from_str(strategy: &str) -> Self {
         match strategy {
@@ -132,14 +130,9 @@ impl BalanceStrategy {
                     let mut scores = Vec::new();
                     let client = reqwest::Client::builder().build().unwrap();
                     for (index, endpoint) in endpoints.iter().enumerate() {
-                        match fetch_resource_usage(&client, endpoint).await {
-                            Ok(usage) => {
-                                let score = usage.cpu_usage_percent + usage.memory_usage_percent;
-                                scores.push((index, FloatOrd(score)));
-                            },
-                            Err(e) => {
-                                eprintln!("Error fetching resource usage from {}: {:?}", endpoint, e);
-                            }
+                        if let Ok(usage) = fetch_resource_usage(&client, endpoint).await {
+                            let score = usage.cpu_usage_percent + usage.memory_usage_percent;
+                            scores.push((index, FloatOrd(score)));
                         }
                     }
 

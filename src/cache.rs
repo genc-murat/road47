@@ -61,17 +61,19 @@ impl Cache {
         let mut entries = self.entries.write().await;
 
         entries.retain(|_, v| !v.is_expired(now));
-    
+
         if entries.len() >= self.capacity && !entries.contains_key(&key) {
-            if let Some(lru_key) = entries
+            let lru_key = entries
                 .iter()
+                .filter(|(_, entry)| !entry.is_expired(now))
                 .min_by_key(|(_, entry)| entry.last_accessed)
-                .map(|(k, _)| k.clone())
-            {
-                entries.remove(&lru_key);
+                .map(|(k, _)| k.clone());
+
+            if let Some(k) = lru_key {
+                entries.remove(&k);
             }
         }
-    
+
         entries.insert(key, CacheEntry::new(value, self.ttl, now));
     }
 }
