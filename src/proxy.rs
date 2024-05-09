@@ -268,44 +268,50 @@ async fn proxy_traffic_and_cache_response(
         let mut counts = connection_counts.lock().await;
         *counts.entry(target_addr.to_string()).or_insert(0) += 1;
     }
+
     let (mut ri, mut wi) = incoming.split();
     let (mut ro, mut wo) = target.split();
-    match tokio::try_join!(tokio::io::copy(&mut ri, &mut wo), tokio::io::copy(&mut ro, &mut wi)) {
-        Ok(_) => info!("Proxy completed successfully for {}", target_addr),
-        Err(e) => warn!("Proxy operation failed for {}: {:?}", target_addr, e),
-    }
+
+    // Read the first line of the request to extract the method and path
+    let mut reader = BufReader::new(&mut ri);
+    let mut first_line = String::new();
+    reader.read_line(&mut first_line).await?;
+    let mut parts = first_line.split_whitespace();
+    let method = parts.next().unwrap_or("GET");
+    let path = parts.next().unwrap_or("/");
+
+    // Reconstruct the request line with the target address and extracted path
+    let modified_request_line = format!("{} {} HTTP/1.1\r\n", method, path);
+    wo.write_all(modified_request_line.as_bytes()).await?;
+
+    // Forward the remaining headers and body
+    io::copy(&mut reader, &mut wo).await?;
+
+    // Read the target response and forward it to the client
     let mut target_response_buffer = Vec::new();
-    let proxy_result = tokio::try_join!(
-        tokio::io::copy(&mut ri, &mut wo),
-        read_and_write(&mut ro, &mut wi, &mut target_response_buffer),
-    );
+    let proxy_result = read_and_write(&mut ro, &mut wi, &mut target_response_buffer).await;
+
+    // Cache the response if applicable
     if let Ok(_) = proxy_result {
         if cache_enabled_endpoints
             .as_ref()
             .map_or(false, |eps| eps.contains(&requested_endpoint))
         {
             let cache_lock = cache.lock().await;
-            cache_lock
-                .put(requested_endpoint, target_response_buffer)
-                .await;
+            cache_lock.put(requested_endpoint, target_response_buffer).await;
         }
-        info!(
-            "Proxy and cache operation completed successfully for {}",
-            target_addr
-        );
+        info!("Proxy and cache operation completed successfully for {}", target_addr);
     } else {
-        warn!(
-            "Proxy operation failed for {}: {:?}",
-            target_addr,
-            proxy_result.err().unwrap()
-        );
+        warn!("Proxy operation failed for {}: {:?}", target_addr, proxy_result.err().unwrap());
     }
+
     {
         let mut counts = connection_counts.lock().await;
         if let Some(count) = counts.get_mut(target_addr) {
             *count = count.saturating_sub(1);
         }
     }
+
     Ok(())
 }
 

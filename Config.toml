@@ -22,15 +22,15 @@
 
 [[route]]
 listen_addr = "localhost:5000"
-target_addrs = ["192.168.51.3:8089"]
+target_addrs = ["http://127.0.0.1:5001"]
 timeout_seconds = 20
 balance_strategy = "random"
 
-[[route]]
-listen_addr = "localhost:5001"
-target_addrs = ["localhost:5250"]
-timeout_seconds = 20
-balance_strategy = "random"
+# [[route]]
+# listen_addr = "localhost:5001"
+# target_addrs = ["localhost:5250"]
+# timeout_seconds = 20
+# balance_strategy = "random"
 
 
 # [[route]]
